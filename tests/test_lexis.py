@@ -896,7 +896,6 @@ Item {{
     }})
     property var settings: ({{
       language: lang,
-      themeMode: "omarchy",
       toastScreen: "",
       intervalMin: 5,
       dailyGoal: 50,
@@ -1001,7 +1000,6 @@ Item {{
         listsPage.inspectedListName = ""
         mockSvc.settings = {{
           language: cb.lang,
-          themeMode: "omarchy",
           toastScreen: "",
           intervalMin: 5,
           dailyGoal: 50,

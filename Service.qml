@@ -20,7 +20,6 @@ Item {
 
   property var settings: ({
     language: "en",
-    themeMode: "omarchy",
     toastScreen: "",
     intervalMin: 5,
     dailyGoal: 50,
@@ -35,7 +34,6 @@ Item {
 
   readonly property string lang: settings && settings.language === "tr" ? "tr" : "en"
   readonly property var tokens: Theme.resolveTokens(
-    settings && settings.themeMode ? String(settings.themeMode) : "omarchy",
     Commons.Color.background,
     Commons.Color.foreground,
     Commons.Color.accent,

@@ -24,7 +24,7 @@ Lexis, bilgisayar başında çalışırken araya girmeyen bir kelime öğrenme a
   - **İsteğe bağlı CLI AI aboneliği:** Kendi **Gemini (`agy`)**, **Claude Code (`claude`)** veya **ChatGPT (`codex`)** aboneliğini en düşük kotalı modelle (`gemini-3.8-flash-low`, `claude-haiku-5-5`, `gpt-5.6-luna`) bağlayarak deyim tamamlama ve yazılı cevaplarda eş anlamlı/yazım hatası esnekliği açabilirsin.
   - **Yerel / Özel `/v1` uç noktası:** **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`) ve **OpenRouter** için tek tık ön ayarlar ve canlı `/v1/models` model listeleme.
 - **CSV, TSV, PDF, DOCX, ODT, TXT ve MD kelime listesi içe aktarma:** Yaygın liste biçimlerini tanır (`kelime - anlam`, `kelime = anlam`, `kelime (adj): anlam`, numaralı/madde işaretli satırlar, tablolar, `pdftotext -layout` ile çok satırlı PDF tabloları); eklemeden önce atlanan satırları ve zaten kayıtlı kelimeleri gösteren tam önizleme sunar, tanınmayan satırlar isteğe bağlı olarak AI sağlayıcınla okunur. Ayrıca 30 kelimelik yerleşik akademik başlangıç destesi, 4 sütun CSV eşleyici, CSV yedek dışa aktarma ve eski `kelime.db` veritabanından tek tık taşıma.
-- **Canlı Omarchy teması + Gruvbox Classic:** Aktif Omarchy temasına (`Commons.Color`) canlı uyum sağlar veya tek tıkla sıcak **Gruvbox Classic** koyu temasına sabitlenir.
+- **Canlı Omarchy teması:** Aktif Omarchy temasına (`Commons.Color`) canlı uyum sağlar.
 
 ---
 

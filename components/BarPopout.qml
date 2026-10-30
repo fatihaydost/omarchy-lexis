@@ -23,7 +23,7 @@ Item {
   readonly property string lang: service ? service.lang : "en"
   readonly property var tokens: service
     ? service.tokens
-    : Theme.resolveTokens("omarchy", Commons.Color.background, Commons.Color.foreground, Commons.Color.accent, Commons.Color.urgent)
+    : Theme.resolveTokens(Commons.Color.background, Commons.Color.foreground, Commons.Color.accent, Commons.Color.urgent)
 
   readonly property int answered: service && service.todayData ? (Number(service.todayData.answered) || 0) : 0
   readonly property int goal: service && service.todayData ? Math.max(1, Number(service.todayData.goal) || 50) : 50

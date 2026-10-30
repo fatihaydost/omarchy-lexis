@@ -1,7 +1,7 @@
 .pragma library
 
 // İki dilli metin yardımcısı (varsayılan English, seçilebilir Türkçe),
-// CIE L* kontrast hesapları ve Omarchy canlı tema + Gruvbox Classic renk belirteçleri.
+// CIE L* kontrast hesapları ve Omarchy canlı tema renk belirteçleri.
 
 function t(lang, trText, enText) {
   return lang === "tr" ? trText : enText
@@ -83,33 +83,7 @@ function qtypeLabel(qt, lang) {
   return qt
 }
 
-function resolveTokens(themeMode, omarchyBg, omarchyFg, omarchyAccent, omarchyUrgent) {
-  if (themeMode === "gruvbox") {
-    return {
-      win: "#282828",
-      sidebar: "#1d2021",
-      surface: "#32302f",
-      surface2: "#3c3836",
-      card: "#32302f",
-      card2: "#3c3836",
-      raised: "#504945",
-      popup: Qt.rgba(29 / 255, 32 / 255, 33 / 255, 0.97),
-      line: Qt.rgba(235 / 255, 219 / 255, 178 / 255, 0.11),
-      lineStrong: Qt.rgba(235 / 255, 219 / 255, 178 / 255, 0.22),
-      ink: "#ebdbb2",
-      secondary: "#d5c4a1",
-      muted: "#a89984",
-      faint: "#665c54",
-      primaryBg: "#fe8019",
-      primaryInk: "#1d2021",
-      accent: "#fe8019",
-      ok: "#b8bb26",
-      danger: "#fb4934",
-      radius: 10,
-      radiusSm: 7
-    }
-  }
-
+function resolveTokens(omarchyBg, omarchyFg, omarchyAccent, omarchyUrgent) {
   var bg = omarchyBg || Qt.rgba(16 / 255, 19 / 255, 21 / 255, 1)
   var fg = omarchyFg || Qt.rgba(218 / 255, 222 / 255, 226 / 255, 1)
   var acc = omarchyAccent || Qt.rgba(254 / 255, 128 / 255, 25 / 255, 1)

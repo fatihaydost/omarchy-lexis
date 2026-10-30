@@ -3,8 +3,7 @@ import Quickshell
 import qs.Commons
 import "../Theme.js" as Theme
 
-// Ayarlar sekmesi: Arayüz dili (English / Türkçe), Tema (Omarchy Canlı / Gruvbox Classic),
-// bar ilerleme ve soru ekranı seçimi, soru sıklığı (1–60 dk) ve günlük hedef (1–500),
+// Ayarlar sekmesi: Arayüz dili (English / Türkçe), soru ekranı seçimi, soru sıklığı (1–60 dk) ve günlük hedef (1–500),
 // kullanıcı tanımlı dil çifti (targetLang / meaningLang), Hibrit Ücretsiz Sözlük +
 // İsteğe Bağlı AI (Off, agy, claude, codex, Local/Custom /v1 ön ayarlar + model çekme + 0600 anahtar)
 // ve yerel veri dışa aktarma / eski Kelime veritabanı taşıma.
@@ -39,7 +38,6 @@ Item {
   readonly property var cfg: service && service.settings ? service.settings : ({})
 
   readonly property string uiLanguage: cfg.language === "tr" ? "tr" : "en"
-  readonly property string themeMode: cfg.themeMode === "gruvbox" ? "gruvbox" : "omarchy"
   readonly property string toastScreen: String(cfg.toastScreen || "")
   readonly property int intervalMin: Math.max(1, Math.min(60, Number(cfg.intervalMin) || 5))
   readonly property int dailyGoal: Math.max(1, Math.min(500, Number(cfg.dailyGoal) || 50))
@@ -131,14 +129,14 @@ Item {
           color: root.tokens.muted || "#a89984"
         }
 
-        // Arayüz dili + Tema yan yana
+        // Arayüz dili
         Row {
           width: parent.width
           spacing: 24
 
           // Arayüz Dili
           Column {
-            width: Math.floor((parent.width - 24) / 2)
+            width: parent.width
             spacing: 6
 
             Text {
@@ -185,62 +183,6 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                       if (root.service) root.service.saveSettings({ language: modelData.key })
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          // Tema
-          Column {
-            width: Math.floor((parent.width - 24) / 2)
-            spacing: 6
-
-            Text {
-              text: Theme.t(root.lang, "Tema", "Theme")
-              font.family: root.fontFamily
-              font.pixelSize: 13
-              color: root.tokens.secondary || "#d5c4a1"
-            }
-
-            Flow {
-              width: parent.width
-              spacing: 6
-
-              Repeater {
-                model: [
-                  { key: "omarchy", label: Theme.t(root.lang, "Omarchy Canlı", "Omarchy Live") },
-                  { key: "gruvbox", label: "Gruvbox Classic" }
-                ]
-                delegate: Rectangle {
-                  readonly property bool sel: root.themeMode === modelData.key
-                  width: themeChipTxt.implicitWidth + 20
-                  height: 30
-                  radius: 7
-                  color: sel
-                    ? (root.tokens.primaryBg || "#fe8019")
-                    : (themeChipArea.containsMouse ? (root.tokens.raised || "#504945") : (root.tokens.surface || "#32302f"))
-                  border.width: sel ? 0 : 1
-                  border.color: root.tokens.line || Qt.rgba(1, 1, 1, 0.10)
-
-                  Text {
-                    id: themeChipTxt
-                    anchors.centerIn: parent
-                    text: modelData.label
-                    font.family: root.fontFamily
-                    font.pixelSize: 12
-                    font.weight: sel ? Font.DemiBold : Font.Normal
-                    color: sel ? (root.tokens.primaryInk || "#1d2021") : (root.tokens.ink || "#ebdbb2")
-                  }
-
-                  MouseArea {
-                    id: themeChipArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                      if (root.service) root.service.saveSettings({ themeMode: modelData.key })
                     }
                   }
                 }

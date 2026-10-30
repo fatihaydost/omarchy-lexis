@@ -120,7 +120,6 @@ ASKABLE_WHERE = "w.hidden = 0 AND w.meaning != '' AND COALESCE(l.enabled, 1) = 1
 
 DEFAULT_SETTINGS = {
     "language": "en",
-    "themeMode": "omarchy",
     "toastScreen": "",
     "intervalMin": 5,
     "dailyGoal": 50,
@@ -449,8 +448,6 @@ def _sanitize_settings(cfg: dict) -> dict:
     out = dict(DEFAULT_SETTINGS)
     lang = str(cfg.get("language") or "en").lower()
     out["language"] = "tr" if lang == "tr" else "en"
-    tmode = str(cfg.get("themeMode") or "omarchy").lower()
-    out["themeMode"] = "gruvbox" if tmode == "gruvbox" else "omarchy"
     out["toastScreen"] = str(cfg.get("toastScreen") or "").strip()
     try:
         out["intervalMin"] = max(1, min(60, int(cfg.get("intervalMin", 5))))
