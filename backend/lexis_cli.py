@@ -1,5 +1,7 @@
+import csv
 from dataclasses import dataclass
 import html
+import io
 import json
 import os
 from pathlib import Path
@@ -7,9 +9,14 @@ import random
 import re
 import shutil
 import sqlite3
+import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 
 # Aralıklı tekrar sabitleri (eski kelime uygulamasıyla birebir aynı)
 INTERVALS = [600, 1800, 7200, 86400, 3 * 86400, 7 * 86400]
@@ -17,6 +24,8 @@ RETRY = 600
 SETTLED_BOX = 4
 NEW_PER_DAY = 20
 DAY_SEC = 86400
+AI_TIMEOUT = 45
+HTTP_TIMEOUT = 5.0
 
 QTYPES = ("type_word_meaning", "type_context", "choice_meaning_word", "choice_word_meaning")
 CHOICE_QTYPES = ("choice_meaning_word", "choice_word_meaning")
@@ -28,6 +37,27 @@ LEGACY_QTYPE_MAP = {
     "choice_tr_en": "choice_meaning_word",
     "choice_en_tr": "choice_word_meaning",
 }
+
+HEADER_WORDS = {
+    "kelime",
+    "kelimeler",
+    "word",
+    "words",
+    "anlam",
+    "anlamı",
+    "meaning",
+    "fiil",
+    "eylem",
+    "örnek",
+    "örnek cümle",
+    "example",
+    "çeviri",
+    "türkçe çevirisi",
+    "translation",
+    "no",
+    "sıra",
+}
+DEFAULT_COLUMNS = (0, 1, 2, 3)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lists(
@@ -123,6 +153,117 @@ CLI_PROVIDERS = {
     },
 }
 
+# ISO-639-1 ve ISO-639-3 dil kodu eşlemesi (serbest kullanıcı girişinden çözülür)
+LANG_CODES: dict[str, tuple[str, str]] = {
+    "english": ("en", "eng"),
+    "ingilizce": ("en", "eng"),
+    "en": ("en", "eng"),
+    "eng": ("en", "eng"),
+    "turkish": ("tr", "tur"),
+    "türkçe": ("tr", "tur"),
+    "turkce": ("tr", "tur"),
+    "tr": ("tr", "tur"),
+    "tur": ("tr", "tur"),
+    "german": ("de", "deu"),
+    "deutsch": ("de", "deu"),
+    "almanca": ("de", "deu"),
+    "de": ("de", "deu"),
+    "deu": ("de", "deu"),
+    "spanish": ("es", "spa"),
+    "español": ("es", "spa"),
+    "espanol": ("es", "spa"),
+    "ispanyolca": ("es", "spa"),
+    "es": ("es", "spa"),
+    "spa": ("es", "spa"),
+    "french": ("fr", "fra"),
+    "français": ("fr", "fra"),
+    "francais": ("fr", "fra"),
+    "fransızca": ("fr", "fra"),
+    "fr": ("fr", "fra"),
+    "fra": ("fr", "fra"),
+    "italian": ("it", "ita"),
+    "italiano": ("it", "ita"),
+    "italyanca": ("it", "ita"),
+    "it": ("it", "ita"),
+    "ita": ("it", "ita"),
+    "portuguese": ("pt", "por"),
+    "português": ("pt", "por"),
+    "portekizce": ("pt", "por"),
+    "pt": ("pt", "por"),
+    "por": ("pt", "por"),
+    "russian": ("ru", "rus"),
+    "русский": ("ru", "rus"),
+    "rusça": ("ru", "rus"),
+    "ru": ("ru", "rus"),
+    "rus": ("ru", "rus"),
+    "japanese": ("ja", "jpn"),
+    "日本語": ("ja", "jpn"),
+    "japonca": ("ja", "jpn"),
+    "ja": ("ja", "jpn"),
+    "jpn": ("ja", "jpn"),
+    "korean": ("ko", "kor"),
+    "한국어": ("ko", "kor"),
+    "korece": ("ko", "kor"),
+    "ko": ("ko", "kor"),
+    "kor": ("ko", "kor"),
+    "arabic": ("ar", "ara"),
+    "العربية": ("ar", "ara"),
+    "arapça": ("ar", "ara"),
+    "ar": ("ar", "ara"),
+    "ara": ("ar", "ara"),
+    "dutch": ("nl", "nld"),
+    "nederlands": ("nl", "nld"),
+    "felemenkçe": ("nl", "nld"),
+    "nl": ("nl", "nld"),
+    "nld": ("nl", "nld"),
+    "polish": ("pl", "pol"),
+    "polski": ("pl", "pol"),
+    "lehçe": ("pl", "pol"),
+    "pl": ("pl", "pol"),
+    "pol": ("pl", "pol"),
+    "swedish": ("sv", "swe"),
+    "svenska": ("sv", "swe"),
+    "isveççe": ("sv", "swe"),
+    "sv": ("sv", "swe"),
+    "swe": ("sv", "swe"),
+    "chinese": ("zh", "cmn"),
+    "中文": ("zh", "cmn"),
+    "çince": ("zh", "cmn"),
+    "zh": ("zh", "cmn"),
+    "cmn": ("zh", "cmn"),
+    "greek": ("el", "ell"),
+    "ελληνικά": ("el", "ell"),
+    "yunanca": ("el", "ell"),
+    "el": ("el", "ell"),
+    "ell": ("el", "ell"),
+}
+
+ENRICH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "meaning": {"type": "string"},
+        "pos": {"type": "string", "enum": ["verb", "noun", "adjective", "adverb", "other"]},
+        "example": {"type": "string"},
+        "translation": {"type": "string"},
+    },
+    "required": ["meaning", "pos", "example", "translation"],
+}
+
+JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {"accept": {"type": "boolean"}},
+    "required": ["accept"],
+}
+
+TRANSLATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "translation": {"type": "string"},
+        "source": {"type": "string", "enum": ["target", "meaning"]},
+    },
+    "required": ["translation", "source"],
+}
+
 TR_ALPHABET = "abcçdefgğhıijklmnoöprsştuüvwxyz"
 _TR_RANK = {c: i for i, c in enumerate(TR_ALPHABET)}
 _PUNCT_RE = re.compile(r"[^\w\s-]", re.UNICODE)
@@ -136,6 +277,14 @@ _MULTI_CHAR_FOLD = (
     ("ł", "l"),
     ("ı", "i"),
 )
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def starter_csv_path() -> Path:
+    return repo_root() / "data" / "starter-en.csv"
 
 
 def db_path() -> Path:
@@ -179,12 +328,42 @@ def api_key_path() -> Path:
     return state_dir() / "api_key"
 
 
-def has_custom_api_key() -> bool:
+def read_custom_api_key() -> str:
     p = api_key_path()
     try:
-        return p.is_file() and bool(p.read_text(encoding="utf-8").strip())
+        return p.read_text(encoding="utf-8").strip() if p.is_file() else ""
     except OSError:
-        return False
+        return ""
+
+
+def write_custom_api_key(key: str) -> None:
+    clean = (key or "").strip()
+    p = api_key_path()
+    if not clean:
+        clear_custom_api_key()
+        return
+    fd = os.open(str(p), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, (clean + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    try:
+        os.chmod(p, 0o600)
+    except OSError:
+        pass
+
+
+def clear_custom_api_key() -> None:
+    p = api_key_path()
+    try:
+        if p.exists():
+            p.unlink()
+    except OSError:
+        pass
+
+
+def has_custom_api_key() -> bool:
+    return bool(read_custom_api_key())
 
 
 def legacy_db_path() -> Path:
@@ -242,7 +421,10 @@ def ai_can_run(settings: dict) -> bool:
     if prov == "off":
         return False
     if prov == "custom":
-        return bool(str(settings.get("customBaseUrl") or "").strip() and str(settings.get("customModel") or "").strip())
+        return bool(
+            str(settings.get("customBaseUrl") or "").strip()
+            and str(settings.get("customModel") or "").strip()
+        )
     meta = CLI_PROVIDERS.get(prov)
     return bool(meta and find_bin(meta["bin"]) is not None)
 
@@ -377,6 +559,21 @@ def guess_pos(meaning: str) -> str:
     return "other"
 
 
+def normalize_pos(raw_pos: str, meaning: str = "") -> str:
+    p = (raw_pos or "").strip().lower()
+    if p in ("verb", "noun", "adjective", "adverb", "other"):
+        return p
+    if "verb" in p:
+        return "verb"
+    if "noun" in p:
+        return "noun"
+    if "adj" in p:
+        return "adjective"
+    if "adv" in p:
+        return "adverb"
+    return guess_pos(meaning) if meaning else "other"
+
+
 def choice_label(meaning: str) -> str:
     label = (meaning or "").split(",")[0].strip()
     return label if len(label) <= 28 else label[:27] + "…"
@@ -399,6 +596,735 @@ def highlight_word(sentence: str, word: str) -> str:
 def day_start(now: float) -> float:
     t = time.localtime(now)
     return time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+
+
+# --- CSV & PDF İçe Aktarma ---
+
+
+@dataclass
+class ImportRow:
+    word: str
+    meaning: str
+    example: str = ""
+    translation: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "word": self.word,
+            "meaning": self.meaning,
+            "example": self.example,
+            "translation": self.translation,
+        }
+
+
+def _clean_cell(val) -> str:
+    return " ".join(str(val or "").split())
+
+
+def _is_header_cells(cells: list[str]) -> bool:
+    lowered = {tr_lower(_clean_cell(c)) for c in cells if _clean_cell(c)}
+    return len(lowered & HEADER_WORDS) >= 2
+
+
+def _normalize_columns(cols) -> tuple[int, int, int, int]:
+    if isinstance(cols, list | tuple) and len(cols) >= 2:
+        padded = [int(cols[i]) if i < len(cols) else i for i in range(4)]
+        return (padded[0], padded[1], padded[2], padded[3])
+    return DEFAULT_COLUMNS
+
+
+def read_csv_raw(path: Path | str, limit: int = 10) -> list[list[str]]:
+    text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+    try:
+        dialect = csv.Sniffer().sniff(text[:2048], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    rows = [
+        [_clean_cell(c) for c in r]
+        for r in csv.reader(io.StringIO(text), dialect)
+        if any(str(c).strip() for c in r)
+    ]
+    return rows[:limit]
+
+
+def read_csv_rows(path: Path | str, columns=DEFAULT_COLUMNS) -> list[ImportRow]:
+    cols = _normalize_columns(columns)
+    text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+    try:
+        dialect = csv.Sniffer().sniff(text[:2048], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    lines = [
+        r for r in csv.reader(io.StringIO(text), dialect) if any(str(c).strip() for c in r)
+    ]
+    if lines and _is_header_cells(lines[0]):
+        lines = lines[1:]
+    out: list[ImportRow] = []
+    for r in lines:
+        vals = [
+            _clean_cell(r[idx]) if 0 <= idx < len(r) else ""
+            for idx in cols
+        ]
+        if vals[0] and vals[1]:
+            out.append(ImportRow(vals[0], vals[1], vals[2], vals[3]))
+    return out
+
+
+_LINE_SEG_RE = re.compile(r"\S+(?:\s\S+)*")
+_ROW_HEAD_RE = re.compile(r"^(\s*)(\d{1,4})(\s{2,})(.+)$")
+_PAGE_FOOTER_RE = re.compile(r"(?i)^(sayfa|page)\s*\d+(\s*/\s*\d+)?$")
+
+
+def parse_pdftotext_layout(text: str) -> list[ImportRow]:
+    """pdftotext -layout çıktısından 5 sütunlu (sıra, kelime, anlam, örnek, çeviri) satırları çözer."""
+    rows: list[ImportRow] = []
+    for page in (text or "").split("\f"):
+        current_cols: list[list[str]] | None = None
+        col_x: list[int] = []
+
+        def flush_current() -> None:
+            nonlocal current_cols
+            if current_cols is not None:
+                merged = [_clean_cell(" ".join(parts)) for parts in current_cols]
+                if merged[0] and merged[1]:
+                    rows.append(ImportRow(merged[0], merged[1], merged[2], merged[3]))
+                current_cols = None
+
+        for raw_line in page.splitlines():
+            line = raw_line.rstrip()
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if _PAGE_FOOTER_RE.match(stripped):
+                continue
+
+            m_head = _ROW_HEAD_RE.match(line)
+            if m_head:
+                rest_start = m_head.start(4)
+                segs = [
+                    (rest_start + m.start(), m.group(0))
+                    for m in _LINE_SEG_RE.finditer(m_head.group(4))
+                ]
+                if len(segs) >= 2:
+                    flush_current()
+                    current_cols = [[], [], [], []]
+                    col_x = []
+                    for idx, (sx, stxt) in enumerate(segs[:4]):
+                        current_cols[idx].append(stxt)
+                        col_x.append(sx)
+                    if len(segs) > 4:
+                        current_cols[3].extend(stxt for _, stxt in segs[4:])
+                    continue
+
+            # Devam satırı mı yoksa başlık satırı mı?
+            segs_all = [(m.start(), m.group(0)) for m in _LINE_SEG_RE.finditer(line)]
+            if _is_header_cells([s for _, s in segs_all]):
+                flush_current()
+                continue
+            if current_cols is None or not col_x:
+                continue
+
+            # Devam satırındaki parçaları en yakın sütun X-ofsetine ekle
+            for sx, stxt in segs_all:
+                nearest_idx = min(range(len(col_x)), key=lambda i: abs(sx - col_x[i]))
+                current_cols[nearest_idx].append(stxt)
+
+        flush_current()
+    return rows
+
+
+def read_pdf_rows(path: Path | str) -> list[ImportRow]:
+    p_str = str(path)
+    pdftotext_bin = find_bin("pdftotext") or "pdftotext"
+    try:
+        proc = subprocess.run(
+            [pdftotext_bin, "-layout", p_str, "-"],
+            capture_output=True,
+            text=True,
+            timeout=25,
+            env=child_env(),
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            parsed = parse_pdftotext_layout(proc.stdout)
+            if parsed:
+                return parsed
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    # Sistemde isteğe bağlı pdfplumber varsa yedek olarak dene
+    try:
+        import pdfplumber  # type: ignore[import-not-found]
+
+        out: list[ImportRow] = []
+        with pdfplumber.open(p_str) as pdf:
+            for page in pdf.pages:
+                for table in page.extract_tables():
+                    for r in table:
+                        if len(r) >= 5 and _clean_cell(r[0]).isdigit():
+                            cells = [_clean_cell(c) for c in r[1:5]]
+                            if cells[0] and cells[1]:
+                                out.append(ImportRow(*cells))
+        return out
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def read_import_rows(path: Path | str, columns=DEFAULT_COLUMNS) -> list[ImportRow]:
+    p = Path(path)
+    if p.suffix.lower() == ".pdf":
+        return read_pdf_rows(p)
+    return read_csv_rows(p, columns=columns)
+
+
+def default_list_name_for(path: Path) -> str:
+    stem = path.stem.strip()
+    head, _, num = stem.rpartition("-")
+    if head.lower() in ("kelimeler", "eylemler", "deck", "unit") and num.isdigit():
+        return f"{head.capitalize()}-{num}"
+    return stem or "Imported"
+
+
+def import_file_into_store(
+    store: "Store",
+    path: Path | str,
+    list_name: str | None = None,
+    columns=DEFAULT_COLUMNS,
+) -> dict:
+    p = Path(path)
+    if not p.is_file():
+        return {"ok": False, "error": f"File not found: {p}"}
+    rows = read_import_rows(p, columns=columns)
+    name = (list_name or "").strip() or default_list_name_for(p)
+    store.set_list_source(name, str(p.resolve()))
+    added = 0
+    for r in rows:
+        wid = store.add_word(
+            r.word,
+            meaning=r.meaning,
+            pos=guess_pos(r.meaning),
+            example=r.example,
+            translation=r.translation,
+            list_name=name,
+            enriched=True,
+        )
+        if wid is not None:
+            added += 1
+    return {
+        "ok": True,
+        "listName": name,
+        "added": added,
+        "skipped": len(rows) - added,
+        "total": len(rows),
+    }
+
+
+# --- Hibrit Ücretsiz Sözlük + İsteğe Bağlı AI ---
+
+
+def resolve_lang_codes(lang_name: str, fallback: tuple[str, str]) -> tuple[str, str]:
+    key = tr_lower((lang_name or "").strip())
+    if not key:
+        return fallback
+    if key in LANG_CODES:
+        return LANG_CODES[key]
+    first_word = key.split()[0].strip("()[]{}")
+    if first_word in LANG_CODES:
+        return LANG_CODES[first_word]
+    if len(first_word) == 2 and first_word.isalpha():
+        return (first_word, first_word)
+    if len(first_word) == 3 and first_word.isalpha():
+        return (first_word[:2], first_word)
+    return fallback
+
+
+def _http_get_json(url: str, headers: dict[str, str] | None = None, timeout: float = HTTP_TIMEOUT):
+    req_headers = {"User-Agent": "Lexis-Omarchy/1.0", "Accept": "application/json"}
+    if headers:
+        req_headers.update(headers)
+    req = urllib.request.Request(url, headers=req_headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def _http_post_json(
+    url: str,
+    body: dict,
+    headers: dict[str, str] | None = None,
+    timeout: float = float(AI_TIMEOUT),
+):
+    raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    req_headers = {
+        "User-Agent": "Lexis-Omarchy/1.0",
+        "Content-Type": "application/json; charset=utf-8",
+        "Accept": "application/json",
+    }
+    if headers:
+        req_headers.update(headers)
+    req = urllib.request.Request(url, data=raw, headers=req_headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def _wiktionary_base() -> str:
+    return (
+        os.environ.get("LEXIS_WIKTIONARY_URL")
+        or "https://freedictionaryapi.com/api/v1/entries"
+    ).rstrip("/")
+
+
+def _tatoeba_url() -> str:
+    return (
+        os.environ.get("LEXIS_TATOEBA_URL")
+        or "https://tatoeba.org/en/api_v0/search"
+    ).rstrip("/")
+
+
+def _mymemory_url() -> str:
+    return (
+        os.environ.get("LEXIS_MYMEMORY_URL")
+        or "https://api.mymemory.translated.net/get"
+    ).rstrip("/")
+
+
+def _mymemory_translate(text: str, src_iso2: str, dst_iso2: str) -> str:
+    clean = (text or "").strip()
+    if not clean or src_iso2 == dst_iso2:
+        return ""
+    qs = urllib.parse.urlencode({"q": clean, "langpair": f"{src_iso2}|{dst_iso2}"})
+    try:
+        data = _http_get_json(f"{_mymemory_url()}?{qs}")
+    except (OSError, urllib.error.URLError, ValueError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    tr_txt = str((data.get("responseData") or {}).get("translatedText") or "").strip()
+    if not tr_txt or "MYMEMORY WARNING" in tr_txt.upper():
+        return ""
+    if fold_ascii(tr_txt) == fold_ascii(clean):
+        return ""
+    return tr_txt
+
+
+def lookup_free_dictionary(
+    word: str,
+    target_lang: str,
+    meaning_lang: str,
+) -> dict[str, str] | None:
+    """Wiktionary + Tatoeba + MyMemory ile girişsiz/kotasız sözlük zenginleştirmesi."""
+    clean_word = " ".join((word or "").strip().split())
+    if not clean_word:
+        return None
+    src_iso2, src_iso3 = resolve_lang_codes(target_lang, ("en", "eng"))
+    dst_iso2, dst_iso3 = resolve_lang_codes(meaning_lang, ("tr", "tur"))
+
+    found_in_wikt = False
+    pos = ""
+    meanings: list[str] = []
+    first_def = ""
+    wikt_example = ""
+
+    wikt_url = f"{_wiktionary_base()}/{urllib.parse.quote(src_iso2)}/{urllib.parse.quote(clean_word.lower())}?translations=true"
+    try:
+        wdata = _http_get_json(wikt_url)
+    except (OSError, urllib.error.URLError, ValueError):
+        wdata = None
+
+    if isinstance(wdata, dict):
+        entries = wdata.get("entries") or []
+        if isinstance(entries, list) and entries:
+            found_in_wikt = True
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if not pos and entry.get("partOfSpeech"):
+                    pos = normalize_pos(str(entry["partOfSpeech"]))
+                for sense in entry.get("senses") or []:
+                    if not isinstance(sense, dict):
+                        continue
+                    if not first_def and sense.get("definition"):
+                        first_def = _clean_cell(sense["definition"])
+                    if not wikt_example:
+                        exs = sense.get("examples") or []
+                        if exs and isinstance(exs[0], str):
+                            cand_ex = _clean_cell(exs[0])
+                            if 12 <= len(cand_ex) <= 180:
+                                wikt_example = cand_ex
+                    for tr_item in sense.get("translations") or []:
+                        if not isinstance(tr_item, dict):
+                            continue
+                        lang_obj = tr_item.get("language") or {}
+                        if lang_obj.get("code") == dst_iso2 and tr_item.get("word"):
+                            w_tr = _clean_cell(tr_item["word"])
+                            if w_tr and fold_ascii(w_tr) not in {fold_ascii(x) for x in meanings}:
+                                meanings.append(w_tr)
+                            if len(meanings) >= 4:
+                                break
+
+    # Tatoeba örnek cümle + çeviri çifti
+    tatoeba_example = ""
+    tatoeba_translation = ""
+    tat_qs = urllib.parse.urlencode(
+        {"from": src_iso3, "to": dst_iso3, "query": clean_word.lower()}
+    )
+    try:
+        tdata = _http_get_json(f"{_tatoeba_url()}?{tat_qs}")
+    except (OSError, urllib.error.URLError, ValueError):
+        tdata = None
+
+    if isinstance(tdata, dict):
+        results = tdata.get("results") or []
+        stem = clean_word.lower()[: max(3, len(clean_word) - 2)]
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            sent = _clean_cell(item.get("text") or "")
+            if not sent or not (12 <= len(sent) <= 170):
+                continue
+            tr_groups = item.get("translations") or []
+            tr_sent = ""
+            for grp in tr_groups:
+                if isinstance(grp, list) and grp and isinstance(grp[0], dict):
+                    tr_sent = _clean_cell(grp[0].get("text") or "")
+                    if tr_sent:
+                        break
+            if not tr_sent:
+                continue
+            if stem in sent.lower() or not tatoeba_example:
+                tatoeba_example = sent
+                tatoeba_translation = tr_sent
+                if stem in sent.lower():
+                    break
+
+    meaning_str = ", ".join(meanings[:3])
+    if not meaning_str and src_iso2 == dst_iso2 and first_def:
+        meaning_str = first_def[:90]
+
+    # Wiktionary kelimeyi tanıdıysa ama hedef dil çevirisi boşsa MyMemory ile tamamla
+    if not meaning_str and (found_in_wikt or tatoeba_example):
+        mm_word = _mymemory_translate(clean_word, src_iso2, dst_iso2)
+        if mm_word:
+            meaning_str = mm_word
+
+    example_str = tatoeba_example or wikt_example
+    translation_str = tatoeba_translation
+    if example_str and not translation_str:
+        translation_str = _mymemory_translate(example_str, src_iso2, dst_iso2)
+
+    if not meaning_str and not example_str:
+        return None
+
+    return {
+        "meaning": meaning_str,
+        "pos": normalize_pos(pos, meaning_str),
+        "example": example_str,
+        "translation": translation_str,
+    }
+
+
+def _extract_json_object(raw_text: str) -> dict | None:
+    txt = (raw_text or "").strip()
+    if not txt:
+        return None
+    # ```json ... ``` çitlerini soy
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", txt, flags=re.DOTALL | re.IGNORECASE)
+    if fenced:
+        txt = fenced.group(1).strip()
+    try:
+        parsed = json.loads(txt)
+        return parsed if isinstance(parsed, dict) else None
+    except ValueError:
+        pass
+    start = txt.find("{")
+    end = txt.rfind("}")
+    if start != -1 and end > start:
+        try:
+            parsed = json.loads(txt[start : end + 1])
+            return parsed if isinstance(parsed, dict) else None
+        except ValueError:
+            return None
+    return None
+
+
+def build_cli_command(provider: str, prompt: str, schema: dict, cwd: str) -> list[str]:
+    if provider == "agy":
+        return [
+            find_bin("agy") or "agy",
+            "--model",
+            CLI_PROVIDERS["agy"]["model"],
+            "--effort",
+            "low",
+            "--disable-slash-commands",
+            "--output-format",
+            "json",
+            "--json-schema",
+            json.dumps(schema),
+            f"-p={prompt}",
+        ]
+    if provider == "claude":
+        return [
+            find_bin("claude") or "claude",
+            "-p",
+            prompt,
+            "--model",
+            CLI_PROVIDERS["claude"]["model"],
+            "--effort",
+            "low",
+            "--output-format",
+            "json",
+            "--json-schema",
+            json.dumps(schema),
+            "--tools",
+            "",
+            "--no-session-persistence",
+        ]
+    if provider == "codex":
+        Path(cwd, "schema.json").write_text(
+            json.dumps({**schema, "additionalProperties": False}),
+            encoding="utf-8",
+        )
+        return [
+            find_bin("codex") or "codex",
+            "exec",
+            "-m",
+            CLI_PROVIDERS["codex"]["model"],
+            "--skip-git-repo-check",
+            "--ephemeral",
+            "--sandbox",
+            "read-only",
+            "-c",
+            'model_reasoning_effort="low"',
+            "--output-schema",
+            "schema.json",
+            "-o",
+            "out.json",
+            prompt,
+        ]
+    raise ValueError(f"Unsupported CLI provider: {provider}")
+
+
+def _call_custom_v1(prompt: str, schema: dict, settings: dict) -> dict | None:
+    base_url = str(settings.get("customBaseUrl") or "").strip().rstrip("/")
+    model = str(settings.get("customModel") or "").strip()
+    if not base_url or not model:
+        return None
+    headers: dict[str, str] = {}
+    api_key = read_custom_api_key()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    sys_msg = (
+        "Reply ONLY with a single valid JSON object matching this JSON schema: "
+        + json.dumps(schema)
+    )
+    body = {
+        "model": model,
+        "temperature": 0.1,
+        "max_tokens": 350,
+        "messages": [
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": prompt},
+        ],
+    }
+    try:
+        resp = _http_post_json(f"{base_url}/chat/completions", body, headers=headers)
+    except (OSError, urllib.error.URLError, ValueError):
+        return None
+    if not isinstance(resp, dict):
+        return None
+    choices = resp.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return None
+    content = str(((choices[0].get("message") or {}).get("content")) or "")
+    return _extract_json_object(content)
+
+
+def call_ai_structured(
+    prompt: str,
+    schema: dict,
+    settings: dict,
+    runner=subprocess.run,
+) -> dict | None:
+    provider = str(settings.get("aiProvider") or "off")
+    if provider == "off":
+        return None
+    if provider == "custom":
+        return _call_custom_v1(prompt, schema, settings)
+    if provider not in CLI_PROVIDERS:
+        return None
+
+    with tempfile.TemporaryDirectory(prefix="lexis-ai-") as cwd:
+        try:
+            argv = build_cli_command(provider, prompt, schema, cwd)
+            out = runner(
+                argv,
+                cwd=cwd,
+                timeout=AI_TIMEOUT,
+                capture_output=True,
+                text=True,
+                env=child_env(),
+            )
+            if provider == "agy":
+                data = json.loads(out.stdout)
+                ok = out.returncode == 0 and isinstance(data, dict) and data.get("status") == "SUCCESS"
+                res = data.get("structured_output") if ok else None
+                return res if isinstance(res, dict) else _extract_json_object(str(data.get("response") or ""))
+            if provider == "claude":
+                data = json.loads(out.stdout)
+                ok = out.returncode == 0 and isinstance(data, dict) and data.get("is_error") is False
+                res = data.get("structured_output") if ok else None
+                return res if isinstance(res, dict) else _extract_json_object(str(data.get("result") or ""))
+            if provider == "codex":
+                out_file = Path(cwd, "out.json")
+                if out.returncode == 0 and out_file.is_file():
+                    res = json.loads(out_file.read_text(encoding="utf-8"))
+                    return res if isinstance(res, dict) else None
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+    return None
+
+
+def ai_enrich_word(word: str, settings: dict, runner=subprocess.run) -> dict[str, str] | None:
+    t_lang = settings["targetLang"]
+    m_lang = settings["meaningLang"]
+    prompt = (
+        f"{t_lang} word or phrase: {json.dumps(word)}. "
+        f"Provide its most common {m_lang} meaning(s) (comma-separated, concise), "
+        f"part of speech (verb/noun/adjective/adverb/other), "
+        f"one natural {t_lang} example sentence using it, and the {m_lang} translation of that sentence."
+    )
+    res = call_ai_structured(prompt, ENRICH_SCHEMA, settings, runner=runner)
+    if not res:
+        return None
+    meaning = str(res.get("meaning") or "").strip()
+    if not meaning:
+        return None
+    return {
+        "meaning": meaning,
+        "pos": normalize_pos(str(res.get("pos") or ""), meaning),
+        "example": str(res.get("example") or "").strip(),
+        "translation": str(res.get("translation") or "").strip(),
+    }
+
+
+def ai_judge_answer(
+    word: str,
+    meaning: str,
+    typed_answer: str,
+    settings: dict,
+    runner=subprocess.run,
+) -> bool | None:
+    t_lang = settings["targetLang"]
+    m_lang = settings["meaningLang"]
+    prompt = (
+        f"A learner studying {t_lang} was asked the {m_lang} meaning of {json.dumps(word)} "
+        f"(reference meaning: {json.dumps(meaning)}). They answered {json.dumps(typed_answer)}. "
+        f"Accept (accept: true) if it is a valid {m_lang} synonym/meaning with minor typos allowed; "
+        "otherwise accept: false."
+    )
+    res = call_ai_structured(prompt, JUDGE_SCHEMA, settings, runner=runner)
+    if res and isinstance(res.get("accept"), bool):
+        return bool(res["accept"])
+    return None
+
+
+def candidate_word_for_translation(text: str, translation: str, source: str) -> str | None:
+    clean_in = (text or "").strip()
+    clean_out = (translation or "").strip()
+    if not clean_in or "\n" in clean_in:
+        return None
+    if source == "target":
+        tokens = clean_in.split()
+        return clean_in if 1 <= len(tokens) <= 4 else None
+    first_chunk = clean_out.split(",")[0].strip()
+    tokens = first_chunk.split()
+    return first_chunk if 1 <= len(tokens) <= 2 else None
+
+
+def hybrid_translate_text(text: str, settings: dict, runner=subprocess.run) -> dict | None:
+    clean = (text or "").strip()
+    if not clean:
+        return None
+    t_lang = settings["targetLang"]
+    m_lang = settings["meaningLang"]
+
+    if ai_can_run(settings):
+        prompt = (
+            f"Translate the text bidirectionally between {t_lang} (source='target') "
+            f"and {m_lang} (source='meaning'). For a single word, give common comma-separated meanings. "
+            f'Return JSON fields "translation" and "source". Text: {json.dumps(clean)}'
+        )
+        res = call_ai_structured(prompt, TRANSLATE_SCHEMA, settings, runner=runner)
+        if res and str(res.get("translation") or "").strip() and res.get("source") in ("target", "meaning"):
+            tr_txt = str(res["translation"]).strip()
+            src = str(res["source"])
+            return {
+                "text": clean,
+                "translation": tr_txt,
+                "source": src,
+                "via": "ai",
+                "candidateWord": candidate_word_for_translation(clean, tr_txt, src),
+            }
+
+    # Ücretsiz sözlük + MyMemory çeviri katmanı
+    src_iso2, _ = resolve_lang_codes(t_lang, ("en", "eng"))
+    dst_iso2, _ = resolve_lang_codes(m_lang, ("tr", "tur"))
+
+    if len(clean.split()) <= 2:
+        d_fwd = lookup_free_dictionary(clean, t_lang, m_lang)
+        if d_fwd and d_fwd.get("meaning"):
+            m_txt = d_fwd["meaning"]
+            return {
+                "text": clean,
+                "translation": m_txt,
+                "source": "target",
+                "via": "dictionary",
+                "candidateWord": candidate_word_for_translation(clean, m_txt, "target"),
+            }
+
+    mm_fwd = _mymemory_translate(clean, src_iso2, dst_iso2)
+    if mm_fwd:
+        return {
+            "text": clean,
+            "translation": mm_fwd,
+            "source": "target",
+            "via": "dictionary",
+            "candidateWord": candidate_word_for_translation(clean, mm_fwd, "target"),
+        }
+
+    mm_rev = _mymemory_translate(clean, dst_iso2, src_iso2)
+    if mm_rev:
+        return {
+            "text": clean,
+            "translation": mm_rev,
+            "source": "meaning",
+            "via": "dictionary",
+            "candidateWord": candidate_word_for_translation(clean, mm_rev, "meaning"),
+        }
+    return None
+
+
+def fetch_custom_models(base_url: str) -> list[str]:
+    clean_base = (base_url or "").strip().rstrip("/")
+    if not clean_base:
+        return []
+    headers: dict[str, str] = {}
+    api_key = read_custom_api_key()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    data = _http_get_json(f"{clean_base}/models", headers=headers, timeout=HTTP_TIMEOUT)
+    if not isinstance(data, dict):
+        return []
+    items = data.get("data") or data.get("models") or []
+    out: list[str] = []
+    for item in items:
+        if isinstance(item, dict):
+            mid = str(item.get("id") or item.get("name") or "").strip()
+            if mid:
+                out.append(mid)
+    return out
+
+
+# --- SQLite Depolama ve SRS ---
 
 
 @dataclass
@@ -465,7 +1391,7 @@ class Store:
             return None
         list_id = self.ensure_list(list_name)
         clean_meaning = (meaning or "").strip()
-        resolved_pos = (pos or "").strip() or (guess_pos(clean_meaning) if clean_meaning else "other")
+        resolved_pos = normalize_pos(pos, clean_meaning)
         try:
             cur = self.con.execute(
                 "INSERT INTO words(word, meaning, pos, example, translation, list_id, hidden,"
@@ -526,6 +1452,9 @@ class Store:
             q = f"%{tr_lower(query.strip())}%"
             args.extend([q, q])
         return self._words(" AND ".join(where), args, "ORDER BY tr_lower(w.word), w.id")
+
+    def all_words_for_export(self) -> list[Word]:
+        return self._words("1 = 1", (), "ORDER BY tr_lower(l.name), tr_lower(w.word), w.id")
 
     def log_event(
         self,
@@ -633,6 +1562,79 @@ class Store:
         )
 
 
+def migrate_legacy_db(store: Store, legacy_file: Path) -> dict[str, int]:
+    src = sqlite3.connect(str(legacy_file))
+    try:
+        src_lists: dict[int, str] = {}
+        list_cols = {r[1] for r in src.execute("PRAGMA table_info(lists)")}
+        has_source_col = "source" in list_cols
+        list_query = (
+            "SELECT id, name, COALESCE(enabled, 1), COALESCE(source, '') FROM lists"
+            if has_source_col
+            else "SELECT id, name, COALESCE(enabled, 1), '' FROM lists"
+        )
+        for lid, name, enabled, source in src.execute(list_query).fetchall():
+            clean_name = "Custom" if name == "Kendi" else str(name or "Imported")
+            src_lists[int(lid)] = clean_name
+            store.ensure_list(clean_name)
+            store.set_list_enabled(clean_name, bool(enabled))
+            if source:
+                store.set_list_source(clean_name, str(source))
+
+        word_id_map: dict[int, int] = {}
+        added_words = 0
+        skipped_words = 0
+        for row in src.execute(
+            "SELECT id, word, COALESCE(meaning, ''), COALESCE(pos, ''), COALESCE(example, ''),"
+            " COALESCE(translation, ''), COALESCE(list_id, 0), COALESCE(hidden, 0),"
+            " COALESCE(enriched, 1), COALESCE(box, -1), COALESCE(due_at, 0), COALESCE(created_at, 0)"
+            " FROM words"
+        ).fetchall():
+            old_id, wtxt, meaning, pos, ex, tr, lid, hid, enr, box, due, cts = row
+            lname = src_lists.get(int(lid), "Custom")
+            new_id = store.add_word(
+                str(wtxt),
+                meaning=str(meaning),
+                pos=str(pos),
+                example=str(ex),
+                translation=str(tr),
+                list_name=lname,
+                enriched=bool(enr),
+                box=int(box),
+                due_at=float(due),
+                hidden=bool(hid),
+                created_at=float(cts or time.time()),
+            )
+            if new_id is not None:
+                word_id_map[int(old_id)] = new_id
+                added_words += 1
+            else:
+                skipped_words += 1
+
+        added_events = 0
+        if word_id_map:
+            for old_wid, ts_val, qt, res, ans in src.execute(
+                "SELECT word_id, ts, COALESCE(qtype, ''), COALESCE(result, ''), COALESCE(answer, '') FROM events"
+            ).fetchall():
+                mapped_id = word_id_map.get(int(old_wid))
+                if mapped_id is not None:
+                    canon_qt = LEGACY_QTYPE_MAP.get(str(qt), str(qt))
+                    store.con.execute(
+                        "INSERT INTO events(word_id, ts, qtype, result, answer) VALUES(?, ?, ?, ?, ?)",
+                        (mapped_id, float(ts_val or time.time()), canon_qt, str(res), str(ans)),
+                    )
+                    added_events += 1
+            store.con.commit()
+
+        return {
+            "addedWords": added_words,
+            "skippedWords": skipped_words,
+            "addedEvents": added_events,
+        }
+    finally:
+        src.close()
+
+
 def pick_word(store: Store, now: float) -> Word | None:
     due = store.due_words(now)
     if due:
@@ -680,7 +1682,6 @@ def _select_distractors(store: Store, word: Word, rng: random.Random) -> list[Wo
         candidates.append(w)
 
     rng.shuffle(candidates)
-    # Önce aynı sözcük türü ve aynı liste tercih edilir; yetmezse diğer sözcük türlerinden tamamlanır
     candidates.sort(key=lambda w: (w.pos != word.pos, w.list_id != word.list_id))
     chosen: list[Word] = []
     seen_labels = {own_label}
@@ -971,6 +1972,86 @@ def handle_command(cmd: str, payload: dict) -> dict:
             updated = save_settings_file(payload)
             return build_snapshot(store, updated, payload)
 
+        if cmd == "save-api-key":
+            write_custom_api_key(str(payload.get("apiKey") or ""))
+            return build_snapshot(store, settings, payload)
+
+        if cmd == "clear-api-key":
+            clear_custom_api_key()
+            return build_snapshot(store, settings, payload)
+
+        if cmd == "fetch-custom-models":
+            base_url = str(payload.get("baseUrl") or settings["customBaseUrl"]).strip()
+            try:
+                models = fetch_custom_models(base_url)
+                return {"ok": True, "models": models}
+            except (OSError, urllib.error.URLError, ValueError) as exc:
+                return {"ok": False, "error": str(exc), "models": []}
+
+        if cmd == "login-cmd":
+            prov = str(payload.get("provider") or settings["aiProvider"])
+            meta = CLI_PROVIDERS.get(prov)
+            if not meta:
+                return {"ok": True, "argv": None}
+            bin_path = find_bin(meta["bin"]) or meta["bin"]
+            return {"ok": True, "argv": [bin_path, *meta["login_args"]]}
+
+        if cmd == "test-ai":
+            is_tr = settings["language"] == "tr"
+            prov = settings["aiProvider"]
+            if prov == "off":
+                res = hybrid_translate_text("hello", settings)
+                if res and res.get("translation"):
+                    msg = (
+                        f"Ücretsiz sözlük çalışıyor: hello → {res['translation']}"
+                        if is_tr
+                        else f"Free Dictionary ready: hello → {res['translation']}"
+                    )
+                    return {"ok": True, "connected": True, "message": msg}
+                return {
+                    "ok": True,
+                    "connected": False,
+                    "message": "Sözlük servisine ulaşılamadı." if is_tr else "Could not reach dictionary service.",
+                }
+            if prov in CLI_PROVIDERS:
+                meta = CLI_PROVIDERS[prov]
+                if not find_bin(meta["bin"]):
+                    return {
+                        "ok": True,
+                        "connected": False,
+                        "message": f"{meta['name']} kurulu değil ({meta['bin']})."
+                        if is_tr
+                        else f"{meta['name']} is not installed ({meta['bin']}).",
+                    }
+            if prov == "custom" and not ai_can_run(settings):
+                return {
+                    "ok": True,
+                    "connected": False,
+                    "message": "Base URL ve model adını girin." if is_tr else "Enter Base URL and model name.",
+                }
+            # Doğrudan AI çağrısını sına (yedek sözlüğe düşmeden)
+            prompt = (
+                f"Translate 'hello' between {settings['targetLang']} (source='target') "
+                f"and {settings['meaningLang']} (source='meaning')."
+            )
+            ai_res = call_ai_structured(prompt, TRANSLATE_SCHEMA, settings)
+            if ai_res and str(ai_res.get("translation") or "").strip():
+                tr_out = str(ai_res["translation"]).strip()
+                return {
+                    "ok": True,
+                    "connected": True,
+                    "message": f"Bağlantı başarılı: hello → {tr_out}"
+                    if is_tr
+                    else f"Connected: hello → {tr_out}",
+                }
+            return {
+                "ok": True,
+                "connected": False,
+                "message": "Sağlayıcı yanıt vermedi; giriş durumunu kontrol edin."
+                if is_tr
+                else "Provider did not respond; check login or endpoint.",
+            }
+
         if cmd == "add-word":
             raw_word = str(payload.get("word") or "").strip()
             if not raw_word:
@@ -1024,7 +2105,7 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 if m_clean and "pos" not in payload:
                     updates["pos"] = guess_pos(m_clean)
             if "pos" in payload and str(payload["pos"] or "").strip():
-                updates["pos"] = str(payload["pos"]).strip()
+                updates["pos"] = normalize_pos(str(payload["pos"]).strip())
             if "example" in payload:
                 updates["example"] = str(payload["example"] or "").strip()
             if "translation" in payload:
@@ -1066,6 +2147,194 @@ def handle_command(cmd: str, payload: dict) -> dict:
                     for w in rows
                 ],
             }
+
+        if cmd == "preview-import":
+            p = Path(str(payload.get("path") or "").strip()).expanduser()
+            if not p.is_file():
+                return {"ok": False, "error": f"File not found: {p}"}
+            kind = "pdf" if p.suffix.lower() == ".pdf" else "csv"
+            cols = _normalize_columns(payload.get("columns"))
+            rows = read_import_rows(p, columns=cols)
+            raw = [] if kind == "pdf" else read_csv_raw(p, limit=10)
+            return {
+                "ok": True,
+                "path": str(p),
+                "kind": kind,
+                "name": default_list_name_for(p),
+                "total": len(rows),
+                "rows": [r.to_dict() for r in rows[:10]],
+                "raw": raw,
+            }
+
+        if cmd == "confirm-import":
+            p = Path(str(payload.get("path") or "").strip()).expanduser()
+            cols = _normalize_columns(payload.get("columns"))
+            res = import_file_into_store(
+                store,
+                p,
+                list_name=str(payload.get("listName") or "").strip() or None,
+                columns=cols,
+            )
+            if not res.get("ok"):
+                return res
+            snap = build_snapshot(store, settings, payload)
+            snap.update(res)
+            return snap
+
+        if cmd == "load-starter":
+            sp = starter_csv_path()
+            res = import_file_into_store(store, sp, list_name="Starter Deck")
+            if not res.get("ok"):
+                return res
+            snap = build_snapshot(store, settings, payload)
+            snap.update(res)
+            return snap
+
+        if cmd == "import-legacy":
+            lp_str = str(payload.get("path") or "").strip()
+            lp = Path(lp_str).expanduser() if lp_str else legacy_db_path()
+            if not lp.is_file():
+                return {"ok": False, "error": f"Legacy database not found: {lp}"}
+            counts = migrate_legacy_db(store, lp)
+            snap = build_snapshot(store, settings, payload)
+            snap.update(counts)
+            return snap
+
+        if cmd == "export-csv":
+            out_p = Path(str(payload.get("path") or "").strip()).expanduser()
+            if not str(out_p):
+                return {"ok": False, "error": "Missing export path"}
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            all_words = store.all_words_for_export()
+            with out_p.open("w", encoding="utf-8", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(["word", "meaning", "example", "translation", "list", "box", "hidden"])
+                for w in all_words:
+                    writer.writerow(
+                        [w.word, w.meaning, w.example, w.translation, w.list_name, w.box, w.hidden]
+                    )
+            return {"ok": True, "count": len(all_words), "path": str(out_p)}
+
+        if cmd == "enrich-word":
+            wid = int(payload.get("wordId") or 0)
+            initial = store.get(wid)
+            if not initial:
+                return {"ok": False, "error": "Word not found"}
+            if initial.enriched and initial.meaning.strip():
+                hist = store.full_history(initial.id, answered_only=True)
+                snap = build_snapshot(store, settings, {**payload, "selectedWordId": wid})
+                snap.update(
+                    {
+                        "wordId": wid,
+                        "enriched": True,
+                        "via": "none",
+                        "word": word_to_dict(initial, last5=hist[-5:], history=hist),
+                    }
+                )
+                return snap
+
+            dict_res = (
+                lookup_free_dictionary(initial.word, settings["targetLang"], settings["meaningLang"])
+                if settings.get("dictionaryEnabled", True)
+                else None
+            )
+            meaning = (dict_res or {}).get("meaning", "").strip()
+            pos = (dict_res or {}).get("pos", "").strip()
+            example = (dict_res or {}).get("example", "").strip()
+            translation = (dict_res or {}).get("translation", "").strip()
+            used_dict = bool(meaning or example)
+            used_ai = False
+
+            need_ai = (not meaning or not example or not translation) and ai_can_run(settings)
+            if need_ai:
+                ai_res = ai_enrich_word(initial.word, settings)
+                if ai_res:
+                    used_ai = True
+                    if not meaning and ai_res.get("meaning"):
+                        meaning = ai_res["meaning"]
+                    if (not pos or pos == "other") and ai_res.get("pos"):
+                        pos = ai_res["pos"]
+                    if not example and ai_res.get("example"):
+                        example = ai_res["example"]
+                        translation = ai_res.get("translation", "")
+                    elif example and not translation and ai_res.get("translation") and not ai_res.get("example"):
+                        translation = ai_res["translation"]
+
+            # Kirli düzenleme koruması: çağrı sürerken kullanıcının yazdığı alanları ezme
+            fresh = store.get(wid)
+            if not fresh:
+                return {"ok": False, "error": "Word removed during enrichment"}
+
+            updates: dict[str, object] = {}
+            if not fresh.enriched and not fresh.meaning.strip() and meaning:
+                updates["meaning"] = meaning
+                updates["pos"] = normalize_pos(pos, meaning)
+                updates["enriched"] = 1
+
+            if not fresh.example.strip() and example:
+                updates["example"] = example
+                if not fresh.translation.strip() and translation:
+                    updates["translation"] = translation
+
+            if updates:
+                store.update_word(wid, **updates)
+
+            after = store.get(wid) or fresh
+            via = (
+                "hybrid"
+                if (used_dict and used_ai and updates)
+                else "dictionary"
+                if (used_dict and updates)
+                else "ai"
+                if (used_ai and updates)
+                else "none"
+            )
+            hist = store.full_history(after.id, answered_only=True)
+            snap = build_snapshot(store, settings, {**payload, "selectedWordId": wid})
+            snap.update(
+                {
+                    "wordId": wid,
+                    "enriched": bool(after.enriched),
+                    "via": via,
+                    "word": word_to_dict(after, last5=hist[-5:], history=hist),
+                }
+            )
+            return snap
+
+        if cmd == "judge-answer":
+            now = float(payload.get("now") or time.time())
+            wid = int(payload.get("wordId") or 0)
+            qtype = str(payload.get("qtype") or "type_word_meaning")
+            typed = str(payload.get("typedText") or "").strip()
+            word = store.get(wid)
+            if not word:
+                return {"ok": False, "error": "Word not found"}
+            accepted = bool(ai_judge_answer(word.word, word.meaning, typed, settings))
+            res_kind = "correct" if accepted else "wrong"
+            apply_srs(store, word, res_kind, now, qtype=qtype, answer=typed)
+            snap = build_snapshot(store, settings, payload)
+            snap.update(
+                {
+                    "status": "recorded",
+                    "result": res_kind,
+                    "feedback": build_feedback(word, qtype, accepted),
+                }
+            )
+            return snap
+
+        if cmd == "translate-text":
+            txt = str(payload.get("text") or "").strip()
+            if not txt:
+                return {"ok": False, "error": "Empty text"}
+            tr_res = hybrid_translate_text(txt, settings)
+            if not tr_res:
+                return {
+                    "ok": False,
+                    "error": "Çeviri alınamadı."
+                    if settings["language"] == "tr"
+                    else "Could not translate text.",
+                }
+            return {"ok": True, **tr_res}
 
         if cmd == "next-question":
             now = float(payload.get("now") or time.time())
