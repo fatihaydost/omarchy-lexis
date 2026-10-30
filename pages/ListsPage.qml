@@ -148,15 +148,21 @@ Item {
 
     // Üst başlık + eylem düğmeleri
     Item {
+      id: listHeaderBar
       width: parent.width
-      height: 44
+      height: Math.max(44, listHeaderCol.implicitHeight)
 
       Column {
+        id: listHeaderCol
         anchors.left: parent.left
+        anchors.right: listHeaderActions.left
+        anchors.rightMargin: 16
         anchors.verticalCenter: parent.verticalCenter
         spacing: 3
 
         Text {
+          width: parent.width
+          elide: Text.ElideRight
           text: Theme.t(root.lang, "Listeler", "Lists & Decks")
           font.family: root.fontFamily
           font.pixelSize: 22
@@ -165,6 +171,8 @@ Item {
         }
 
         Text {
+          width: parent.width
+          wrapMode: Text.WordWrap
           text: Theme.t(
             root.lang,
             "Aktif listelerden soru çekilir; CSV, TSV veya numaralı tablo PDF aktarabilirsin.",
@@ -177,6 +185,7 @@ Item {
       }
 
       Row {
+        id: listHeaderActions
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: 8
@@ -294,7 +303,7 @@ Item {
       id: deckListView
       visible: root.lists.length > 0
       width: parent.width
-      height: parent.height - (root.importFeedback.length > 0 ? 116 : 86)
+      height: Math.max(80, parent.height - listHeaderBar.height - (root.importFeedback.length > 0 ? 72 : 42))
       clip: true
       spacing: 6
       model: root.lists
@@ -432,48 +441,51 @@ Item {
       width: parent.width
       height: 36
 
-      Row {
+      Rectangle {
+        id: backListBtn
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 12
-
-        Rectangle {
-          width: backListTxt.implicitWidth + 18
-          height: 30
-          radius: 7
-          color: backListArea.containsMouse
-            ? (root.tokens.raised || "#504945")
-            : (root.tokens.surface || "#32302f")
-
-          Text {
-            id: backListTxt
-            anchors.centerIn: parent
-            text: Theme.t(root.lang, "← Listeler", "← Back")
-            font.family: root.fontFamily
-            font.pixelSize: 12
-            color: root.tokens.ink || "#ebdbb2"
-          }
-
-          MouseArea {
-            id: backListArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.dismissOverlay()
-          }
-        }
+        width: backListTxt.implicitWidth + 18
+        height: 30
+        radius: 7
+        color: backListArea.containsMouse
+          ? (root.tokens.raised || "#504945")
+          : (root.tokens.surface || "#32302f")
 
         Text {
-          anchors.verticalCenter: parent.verticalCenter
-          text: root.inspectedListName + " (" + root.inspectedWords.length + ")"
+          id: backListTxt
+          anchors.centerIn: parent
+          text: Theme.t(root.lang, "← Listeler", "← Back")
           font.family: root.fontFamily
-          font.pixelSize: 18
-          font.weight: Font.DemiBold
+          font.pixelSize: 12
           color: root.tokens.ink || "#ebdbb2"
+        }
+
+        MouseArea {
+          id: backListArea
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.dismissOverlay()
         }
       }
 
+      Text {
+        anchors.left: backListBtn.right
+        anchors.leftMargin: 12
+        anchors.right: inspSrcBtn.visible ? inspSrcBtn.left : parent.right
+        anchors.rightMargin: inspSrcBtn.visible ? 12 : 0
+        anchors.verticalCenter: parent.verticalCenter
+        elide: Text.ElideRight
+        text: root.inspectedListName + " (" + root.inspectedWords.length + ")"
+        font.family: root.fontFamily
+        font.pixelSize: 18
+        font.weight: Font.DemiBold
+        color: root.tokens.ink || "#ebdbb2"
+      }
+
       Rectangle {
+        id: inspSrcBtn
         visible: root.inspectedListSource.length > 0
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
@@ -682,6 +694,8 @@ Item {
         }
 
         Text {
+          width: parent.width
+          elide: Text.ElideRight
           text: {
             if (!root.previewData) return ""
             var fmt = String(root.previewData.kind || "csv").toUpperCase()
@@ -822,7 +836,7 @@ Item {
           Text {
             x: 8 + Math.round(parent.width * 0.60)
             anchors.verticalCenter: parent.verticalCenter
-            width: Math.round(parent.width * 0.38)
+            width: Math.max(40, parent.width - x - 8)
             elide: Text.ElideRight
             text: String(modelData.example || "")
             font.family: root.fontFamily
@@ -834,7 +848,8 @@ Item {
     }
 
     // Alt onay / iptal düğmeleri
-    Row {
+    Flow {
+      width: parent.width
       spacing: 10
 
       Rectangle {

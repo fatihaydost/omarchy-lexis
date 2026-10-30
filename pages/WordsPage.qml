@@ -157,7 +157,7 @@ Item {
           spacing: 6
 
           Rectangle {
-            width: parent.width - 70
+            width: parent.width - addWordBtn.width - 6
             height: 32
             radius: 7
             color: root.tokens.surface || "#32302f"
@@ -169,8 +169,11 @@ Item {
             Text {
               visible: searchInput.text.length === 0
               anchors.left: parent.left
+              anchors.right: parent.right
               anchors.leftMargin: 9
+              anchors.rightMargin: 9
               anchors.verticalCenter: parent.verticalCenter
+              elide: Text.ElideRight
               text: Theme.t(root.lang, "Kelime veya anlam ara…", "Search words…")
               font.family: root.fontFamily
               font.pixelSize: 12
@@ -197,7 +200,8 @@ Item {
           }
 
           Rectangle {
-            width: 64
+            id: addWordBtn
+            width: Math.max(64, addWordBtnTxt.implicitWidth + 18)
             height: 32
             radius: 7
             color: addBtnArea.containsMouse
@@ -205,6 +209,7 @@ Item {
               : (root.tokens.primaryBg || "#fe8019")
 
             Text {
+              id: addWordBtnTxt
               anchors.centerIn: parent
               text: Theme.t(root.lang, "+ Ekle", "+ Add")
               font.family: root.fontFamily
@@ -233,7 +238,8 @@ Item {
         }
 
         // Filtre yongaları: All | Custom | Hidden + Liste seçici
-        Row {
+        Flow {
+          id: filterChipsFlow
           width: parent.width
           spacing: 5
 
@@ -402,7 +408,7 @@ Item {
         ListView {
           id: wordsListView
           width: parent.width
-          height: parent.height - 118 - (root.listDropdownOpen && root.lists.length > 0 ? Math.min(144, deckDropCol.implicitHeight + 20) : 0)
+          height: Math.max(60, parent.height - 94 - filterChipsFlow.implicitHeight - (root.listDropdownOpen && root.lists.length > 0 ? Math.min(144, deckDropCol.implicitHeight + 20) : 0))
           clip: true
           spacing: 2
           model: root.words
@@ -521,6 +527,8 @@ Item {
           spacing: 4
 
           Text {
+            width: parent.width
+            elide: Text.ElideRight
             text: Theme.t(root.lang, "Kelime / İfade", "Word / Phrase")
             font.family: root.fontFamily
             font.pixelSize: 12
@@ -560,6 +568,8 @@ Item {
           spacing: 4
 
           Text {
+            width: parent.width
+            elide: Text.ElideRight
             text: Theme.t(root.lang, "Anlam (virgülle ayrılmış)", "Meaning (comma-separated, optional)")
             font.family: root.fontFamily
             font.pixelSize: 12
@@ -599,6 +609,8 @@ Item {
           spacing: 4
 
           Text {
+            width: parent.width
+            elide: Text.ElideRight
             text: Theme.t(root.lang, "Örnek cümle (isteğe bağlı)", "Example sentence (optional)")
             font.family: root.fontFamily
             font.pixelSize: 12
@@ -641,6 +653,8 @@ Item {
             spacing: 4
 
             Text {
+              width: parent.width
+              elide: Text.ElideRight
               text: Theme.t(root.lang, "Cümle çevirisi (isteğe bağlı)", "Sentence translation (optional)")
               font.family: root.fontFamily
               font.pixelSize: 12
@@ -678,6 +692,8 @@ Item {
             spacing: 4
 
             Text {
+              width: parent.width
+              elide: Text.ElideRight
               text: Theme.t(root.lang, "Liste", "Deck")
               font.family: root.fontFamily
               font.pixelSize: 12
@@ -711,7 +727,8 @@ Item {
           }
         }
 
-        Row {
+        Flow {
+          width: parent.width
           spacing: 10
 
           Rectangle {
@@ -777,18 +794,21 @@ Item {
         spacing: 18
 
         // Üst etiketler: liste adı + sözcük türü + kutu durumu
-        Row {
+        Flow {
+          width: parent.width
           spacing: 8
 
           Rectangle {
             height: 22
-            width: dListTxt.implicitWidth + 14
+            width: Math.min(parent.width, dListTxt.implicitWidth + 14)
             radius: 5
             color: root.tokens.surface || "#32302f"
 
             Text {
               id: dListTxt
               anchors.centerIn: parent
+              width: Math.min(implicitWidth, parent.width - 12)
+              elide: Text.ElideRight
               text: root.detail ? String(root.detail.listName || "Custom") : ""
               font.family: root.fontFamily
               font.pixelSize: 11
@@ -814,7 +834,7 @@ Item {
           }
 
           Text {
-            anchors.verticalCenter: parent.verticalCenter
+            topPadding: 3
             text: root.detail ? Theme.boxLabel(root.detail.box, root.lang) : ""
             font.family: root.fontFamily
             font.pixelSize: 11
@@ -942,7 +962,8 @@ Item {
         }
 
         // Eylem düğmeleri: Şimdi sor · Düzenle · Gizle/Geri aç
-        Row {
+        Flow {
+          width: parent.width
           spacing: 8
 
           Rectangle {

@@ -78,7 +78,8 @@ Item {
         width: parent.width
         spacing: 10
 
-        Row {
+        Flow {
+          width: parent.width
           spacing: 8
 
           Text {
@@ -90,8 +91,7 @@ Item {
           }
 
           Text {
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 8
+            topPadding: 20
             text: "/ " + root.goal + " " + Theme.t(root.lang, "bugün cevaplanan", "answered today")
             font.family: root.fontFamily
             font.pixelSize: 14
@@ -114,6 +114,8 @@ Item {
         }
 
         Text {
+          width: parent.width
+          wrapMode: Text.WordWrap
           text: {
             var rem = Math.max(0, root.goal - root.answered)
             if (rem === 0) return Theme.t(root.lang, "Günlük hedef tamamlandı.", "Daily goal reached.")
@@ -126,8 +128,9 @@ Item {
         }
       }
 
-      // Birincil Eylemler
-      Row {
+      // Birincil Eylemler (Flow sayesinde uzun etiketler sağ sütuna taşmadan alt satıra sarılır)
+      Flow {
+        width: parent.width
         spacing: 10
 
         Rectangle {
@@ -201,7 +204,7 @@ Item {
 
         Rectangle {
           visible: root.totalWords === 0
-          width: impTxt.implicitWidth + 24
+          width: impTxt.implicitWidth + 28
           height: 36
           radius: 8
           color: impBtn.containsMouse

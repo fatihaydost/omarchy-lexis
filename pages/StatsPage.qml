@@ -99,6 +99,8 @@ Item {
         }
 
         Text {
+          width: parent.width
+          wrapMode: Text.WordWrap
           text: Theme.t(
             root.lang,
             "Son 30 günlük aralıklı tekrar performansı ve kutu dağılımı.",
@@ -117,10 +119,12 @@ Item {
 
         // 1) Bugün cevaplanan
         Column {
-          width: Math.floor((parent.width - 50) / 3)
+          width: Math.floor((parent.width - 98) / 3)
           spacing: 4
 
           Text {
+            width: parent.width
+            elide: Text.ElideRight
             text: Theme.t(root.lang, "BUGÜN CEVAPLANAN", "ANSWERED TODAY")
             font.family: root.fontFamily
             font.pixelSize: 11
@@ -146,10 +150,12 @@ Item {
 
         // 2) 30 günlük doğruluk
         Column {
-          width: Math.floor((parent.width - 50) / 3)
+          width: Math.floor((parent.width - 98) / 3)
           spacing: 4
 
           Text {
+            width: parent.width
+            elide: Text.ElideRight
             text: Theme.t(root.lang, "30 GÜN DOĞRULUK", "30-DAY ACCURACY")
             font.family: root.fontFamily
             font.pixelSize: 11
@@ -175,10 +181,12 @@ Item {
 
         // 3) Oturan kelimeler
         Column {
-          width: Math.floor((parent.width - 50) / 3)
+          width: Math.floor((parent.width - 98) / 3)
           spacing: 4
 
           Text {
+            width: parent.width
+            elide: Text.ElideRight
             text: Theme.t(root.lang, "OTURAN KELİME", "SETTLED WORDS")
             font.family: root.fontFamily
             font.pixelSize: 11
@@ -231,9 +239,9 @@ Item {
             width: parent.width
             spacing: 10
 
-            Row {
+            Flow {
               width: parent.width
-              spacing: 10
+              spacing: 6
 
               Text {
                 text: Theme.t(root.lang, "SON 30 GÜN", "LAST 30 DAYS")
@@ -253,6 +261,8 @@ Item {
             }
 
             Grid {
+              id: activityGrid
+              readonly property int cellPx: Math.min(24, Math.max(14, Math.floor((parent.width - 54) / 10)))
               columns: 10
               spacing: 6
 
@@ -263,8 +273,8 @@ Item {
                   readonly property real intensity: cnt <= 0
                     ? 0.0
                     : Math.max(0.24, Math.min(1.0, cnt / root.maxDayCount))
-                  width: 24
-                  height: 24
+                  width: activityGrid.cellPx
+                  height: activityGrid.cellPx
                   radius: 5
                   color: cnt <= 0
                     ? (root.tokens.surface || "#32302f")
@@ -383,6 +393,8 @@ Item {
           spacing: 14
 
           Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
             text: Theme.t(root.lang, "SORU TİPİNE GÖRE DOĞRULUK", "ACCURACY BY QUESTION TYPE")
             font.family: root.fontFamily
             font.pixelSize: 11
@@ -415,7 +427,10 @@ Item {
 
                   Text {
                     anchors.left: parent.left
+                    anchors.right: qtypePctTxt.left
+                    anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
                     text: Theme.qtypeLabel(modelData, root.lang)
                     font.family: root.fontFamily
                     font.pixelSize: 13
@@ -423,6 +438,7 @@ Item {
                   }
 
                   Text {
+                    id: qtypePctTxt
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: qtypeBar.hasData ? (qtypeBar.pct + "%") : "—"

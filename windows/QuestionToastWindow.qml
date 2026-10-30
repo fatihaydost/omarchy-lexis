@@ -188,10 +188,13 @@ Item {
 
             Row {
               anchors.left: parent.left
+              anchors.right: toastRightBtns.left
+              anchors.rightMargin: 8
               anchors.verticalCenter: parent.verticalCenter
               spacing: 7
 
               LexisGlyph {
+                id: toastGlyph
                 anchors.verticalCenter: parent.verticalCenter
                 pixelSize: 13
                 inkColor: root.tokens.ink || "#ebdbb2"
@@ -200,6 +203,8 @@ Item {
               }
 
               Text {
+                width: Math.max(40, parent.width - toastGlyph.width - 7)
+                elide: Text.ElideRight
                 anchors.verticalCenter: parent.verticalCenter
                 text: {
                   if (root.question) return String(root.question.prompt || "")
@@ -226,6 +231,7 @@ Item {
             }
 
             Row {
+              id: toastRightBtns
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
               spacing: 6

@@ -103,6 +103,8 @@ Item {
         }
 
         Text {
+          width: parent.width
+          wrapMode: Text.WordWrap
           text: Theme.t(
             root.lang,
             "Görünüm, soru ritmi, öğrenilen dil çifti ve hibrit sözlük / isteğe bağlı AI bağlantısı.",
@@ -147,7 +149,8 @@ Item {
               color: root.tokens.secondary || "#d5c4a1"
             }
 
-            Row {
+            Flow {
+              width: parent.width
               spacing: 6
 
               Repeater {
@@ -202,7 +205,8 @@ Item {
               color: root.tokens.secondary || "#d5c4a1"
             }
 
-            Row {
+            Flow {
+              width: parent.width
               spacing: 6
 
               Repeater {
@@ -287,6 +291,8 @@ Item {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - 48
+              wrapMode: Text.WordWrap
               text: Theme.t(root.lang, "Üst barda günlük sayacı göster", "Show daily counter in bar")
               font.family: root.fontFamily
               font.pixelSize: 13
@@ -423,7 +429,8 @@ Item {
               color: root.tokens.secondary || "#d5c4a1"
             }
 
-            Row {
+            Flow {
+              width: parent.width
               spacing: 6
 
               Rectangle {
@@ -532,7 +539,8 @@ Item {
               color: root.tokens.secondary || "#d5c4a1"
             }
 
-            Row {
+            Flow {
+              width: parent.width
               spacing: 6
 
               Rectangle {
@@ -658,10 +666,12 @@ Item {
           spacing: 16
 
           Column {
-            width: Math.floor((parent.width - 110) / 2)
+            width: Math.floor((parent.width - saveLangBtn.width - 32) / 2)
             spacing: 4
 
             Text {
+              width: parent.width
+              elide: Text.ElideRight
               text: Theme.t(root.lang, "Öğrendiğin dil (örn. English, German, Japanese)", "Target language (e.g. English, German, Japanese)")
               font.family: root.fontFamily
               font.pixelSize: 12
@@ -699,10 +709,12 @@ Item {
           }
 
           Column {
-            width: Math.floor((parent.width - 110) / 2)
+            width: Math.floor((parent.width - saveLangBtn.width - 32) / 2)
             spacing: 4
 
             Text {
+              width: parent.width
+              elide: Text.ElideRight
               text: Theme.t(root.lang, "Anlam dili (örn. Turkish, English)", "Meaning language (e.g. Turkish, English)")
               font.family: root.fontFamily
               font.pixelSize: 12
@@ -740,8 +752,9 @@ Item {
           }
 
           Rectangle {
+            id: saveLangBtn
             anchors.bottom: parent.bottom
-            width: 78
+            width: Math.max(78, saveLangTxt.implicitWidth + 24)
             height: 32
             radius: 7
             color: saveLangArea.containsMouse
@@ -751,6 +764,7 @@ Item {
             border.color: root.tokens.line || Qt.rgba(1, 1, 1, 0.10)
 
             Text {
+              id: saveLangTxt
               anchors.centerIn: parent
               text: Theme.t(root.lang, "Kaydet", "Apply")
               font.family: root.fontFamily
@@ -830,6 +844,8 @@ Item {
             spacing: 2
 
             Text {
+              width: parent.width
+              wrapMode: Text.WordWrap
               text: Theme.t(
                 root.lang,
                 "Birincil Ücretsiz Sözlük (Wiktionary + Tatoeba + MyMemory)",
@@ -1011,12 +1027,12 @@ Item {
             spacing: 10
 
             // Tek tık ön ayarlar
-            Row {
+            Flow {
               width: parent.width
               spacing: 6
 
               Text {
-                anchors.verticalCenter: parent.verticalCenter
+                topPadding: 4
                 text: Theme.t(root.lang, "Ön ayar:", "Presets:")
                 font.family: root.fontFamily
                 font.pixelSize: 11
@@ -1074,7 +1090,7 @@ Item {
               spacing: 8
 
               Rectangle {
-                width: parent.width - 134
+                width: parent.width - fetchModBtn.width - 8
                 height: 30
                 radius: 6
                 color: root.tokens.surface2 || "#3c3836"
@@ -1099,7 +1115,8 @@ Item {
               }
 
               Rectangle {
-                width: 126
+                id: fetchModBtn
+                width: Math.max(116, fetchModTxt.implicitWidth + 22)
                 height: 30
                 radius: 6
                 color: fetchModArea.containsMouse
@@ -1109,6 +1126,7 @@ Item {
                 border.color: root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.16)
 
                 Text {
+                  id: fetchModTxt
                   anchors.centerIn: parent
                   text: Theme.t(root.lang, "Modelleri çek", "Fetch models")
                   font.family: root.fontFamily
@@ -1143,7 +1161,7 @@ Item {
               spacing: 8
 
               Rectangle {
-                width: parent.width - 94
+                width: parent.width - saveModBtn.width - 8
                 height: 30
                 radius: 6
                 color: root.tokens.surface2 || "#3c3836"
@@ -1155,8 +1173,11 @@ Item {
                 Text {
                   visible: customModelInput.text.length === 0
                   anchors.left: parent.left
+                  anchors.right: parent.right
                   anchors.leftMargin: 8
+                  anchors.rightMargin: 8
                   anchors.verticalCenter: parent.verticalCenter
+                  elide: Text.ElideRight
                   text: Theme.t(root.lang, "Model adı (örn. qwen2.5:7b, llama3.2:3b)", "Model ID (e.g. qwen2.5:7b, llama3.2:3b)")
                   font.family: "Monospace"
                   font.pixelSize: 11
@@ -1183,7 +1204,8 @@ Item {
               }
 
               Rectangle {
-                width: 86
+                id: saveModBtn
+                width: Math.max(82, saveModTxt.implicitWidth + 22)
                 height: 30
                 radius: 6
                 color: saveModArea.containsMouse
@@ -1193,6 +1215,7 @@ Item {
                 border.color: root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.16)
 
                 Text {
+                  id: saveModTxt
                   anchors.centerIn: parent
                   text: Theme.t(root.lang, "Kaydet", "Save")
                   font.family: root.fontFamily
@@ -1271,7 +1294,7 @@ Item {
               spacing: 8
 
               Rectangle {
-                width: parent.width - ((root.service && root.service.hasCustomApiKey) ? 186 : 98)
+                width: parent.width - saveKeyBtn.width - (clrKeyBtn.visible ? (clrKeyBtn.width + 16) : 8)
                 height: 30
                 radius: 6
                 color: root.tokens.surface2 || "#3c3836"
@@ -1283,8 +1306,11 @@ Item {
                 Text {
                   visible: customKeyInput.text.length === 0
                   anchors.left: parent.left
+                  anchors.right: parent.right
                   anchors.leftMargin: 8
+                  anchors.rightMargin: 8
                   anchors.verticalCenter: parent.verticalCenter
+                  elide: Text.ElideRight
                   text: (root.service && root.service.hasCustomApiKey)
                     ? Theme.t(root.lang, "Kayıtlı anahtar var (0600) — değiştirmek için yaz", "API key saved (0600) — type to replace")
                     : Theme.t(root.lang, "İsteğe bağlı API anahtarı (Ollama/LM Studio için boş bırak)", "Optional API key (leave empty for local Ollama/LM Studio)")
@@ -1310,7 +1336,8 @@ Item {
               }
 
               Rectangle {
-                width: 90
+                id: saveKeyBtn
+                width: Math.max(90, saveKeyTxt.implicitWidth + 20)
                 height: 30
                 radius: 6
                 color: saveKeyArea.containsMouse
@@ -1320,6 +1347,7 @@ Item {
                 border.color: root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.16)
 
                 Text {
+                  id: saveKeyTxt
                   anchors.centerIn: parent
                   text: Theme.t(root.lang, "Anahtar kaydet", "Save key")
                   font.family: root.fontFamily
@@ -1342,8 +1370,9 @@ Item {
               }
 
               Rectangle {
+                id: clrKeyBtn
                 visible: !!(root.service && root.service.hasCustomApiKey)
-                width: 80
+                width: Math.max(76, clrKeyTxt.implicitWidth + 20)
                 height: 30
                 radius: 6
                 color: clrKeyArea.containsMouse
@@ -1353,6 +1382,7 @@ Item {
                 border.color: root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.16)
 
                 Text {
+                  id: clrKeyTxt
                   anchors.centerIn: parent
                   text: Theme.t(root.lang, "Temizle", "Clear")
                   font.family: root.fontFamily
@@ -1375,7 +1405,8 @@ Item {
         }
 
         // Bağlantıyı sına düğmesi + sonuç
-        Row {
+        Flow {
+          width: parent.width
           spacing: 12
 
           Rectangle {
@@ -1412,7 +1443,9 @@ Item {
 
           Text {
             visible: !!(root.service && root.service.aiTestStatus)
-            anchors.verticalCenter: parent.verticalCenter
+            topPadding: 6
+            width: Math.min(implicitWidth, parent.width)
+            wrapMode: Text.WordWrap
             text: root.service ? String(root.service.aiTestStatus || "") : ""
             font.family: root.fontFamily
             font.pixelSize: 12
@@ -1452,7 +1485,8 @@ Item {
           color: root.tokens.muted || "#a89984"
         }
 
-        Row {
+        Flow {
+          width: parent.width
           spacing: 10
 
           Rectangle {
@@ -1518,7 +1552,9 @@ Item {
 
           Text {
             visible: !!(root.service && root.service.statusNotice)
-            anchors.verticalCenter: parent.verticalCenter
+            topPadding: 7
+            width: Math.min(implicitWidth, parent.width)
+            wrapMode: Text.WordWrap
             text: root.service ? String(root.service.statusNotice || "") : ""
             font.family: root.fontFamily
             font.pixelSize: 12

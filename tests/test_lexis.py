@@ -722,6 +722,256 @@ TestCase {{
         self.assertIn("toastWin.inputActive", svc_txt)
         self.assertIn("svcRoot.judging", svc_txt)
 
+    def test_pages_do_not_overflow_columns_in_en_or_tr(self) -> None:
+        mock_imports = Path(self.tmp.name) / "qml_imports"
+        (mock_imports / "qs" / "Commons").mkdir(parents=True, exist_ok=True)
+        (mock_imports / "qs" / "Commons" / "qmldir").write_text(
+            "module qs.Commons\nsingleton Style 1.0 Style.qml\n",
+            encoding="utf-8",
+        )
+        (mock_imports / "qs" / "Commons" / "Style.qml").write_text(
+            'pragma Singleton\nimport QtQuick\nQtObject {\n'
+            '  readonly property QtObject font: QtObject { readonly property string family: "Monospace" }\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        (mock_imports / "Quickshell").mkdir(parents=True, exist_ok=True)
+        (mock_imports / "Quickshell" / "qmldir").write_text(
+            "module Quickshell\nsingleton Quickshell 1.0 Quickshell.qml\n",
+            encoding="utf-8",
+        )
+        (mock_imports / "Quickshell" / "Quickshell.qml").write_text(
+            'pragma Singleton\nimport QtQuick\nQtObject {\n'
+            '  readonly property var screens: [{ name: "eDP-1" }, { name: "DP-1" }]\n'
+            '}\n',
+            encoding="utf-8",
+        )
+
+        pages_uri = (ROOT / "pages").as_uri()
+        qml_test = Path(self.tmp.name) / "tst_layout_overflow.qml"
+        qml_test.write_text(
+            f"""import QtQuick
+import QtTest
+import "{pages_uri}"
+
+Item {{
+  id: harness
+  width: 830
+  height: 680
+
+  QtObject {{
+    id: mockSvc
+    property string lang: "en"
+    property var tokens: ({{}})
+    property bool isMuted: false
+    property int nextInSeconds: 245
+    property var todayData: ({{ answered: 0, goal: 50, totalWords: 0, recent: [] }})
+    property var wordsData: [
+      {{ id: 1, word: "mitigate", meaning: "hafifletmek, azaltmak", last5: ["correct", "wrong"] }}
+    ]
+    property var listsData: [
+      {{ name: "Academic Starter Deck", count: 30, enabled: true, hasSource: true, source: "/tmp/starter.csv" }}
+    ]
+    property var selectedWord: ({{
+      id: 1,
+      word: "mitigate",
+      meaning: "hafifletmek, azaltmak",
+      pos: "verb",
+      box: 2,
+      hidden: true,
+      listName: "Academic Starter Deck",
+      example: "Trees mitigate urban heat.",
+      exampleHtml: "Trees <b>mitigate</b> urban heat.",
+      translation: "Ağaçlar kentsel ısıyı hafifletir.",
+      history: ["correct", "wrong", "correct"]
+    }})
+    property string wordsListFilter: "Academic Starter Deck"
+    property bool translating: false
+    property var lastTranslation: ({{
+      text: "supercalifragilisticexpialidocious phrase",
+      translation: "çok uzun örnek çeviri metni",
+      source: "target",
+      via: "dictionary",
+      candidateWord: "supercalifragilisticexpialidocious phrase example"
+    }})
+    property var statsData: ({{
+      answeredToday: 12,
+      accuracy: 84,
+      settled: 5,
+      totalWords: 30,
+      days: [0,1,2,3,4,5,0,1,2,3,4,5,0,1,2,3,4,5,0,1,2,3,4,5,0,1,2,3,4,8],
+      hardest: [{{ id: 1, word: "mitigate", misses: 4 }}, {{ id: 2, word: "scrutinize", misses: 2 }}],
+      byType: ({{ choice_word_meaning: 90, choice_meaning_word: 80, type_word_meaning: 75, type_context: 70 }})
+    }})
+    property var settings: ({{
+      language: lang,
+      themeMode: "omarchy",
+      showProgressInBar: true,
+      toastScreen: "",
+      intervalMin: 5,
+      dailyGoal: 50,
+      targetLang: "English",
+      meaningLang: "Turkish",
+      dictionaryEnabled: true,
+      aiProvider: "custom",
+      customBaseUrl: "http://127.0.0.1:11434/v1",
+      customModel: "qwen2.5:7b"
+    }})
+    property var providers: [
+      {{ id: "agy", installed: true, model: "gemini-3.8-flash-low" }}
+    ]
+    property var customModels: ["qwen2.5:7b", "llama3.2:3b-instruct-q4_K_M"]
+    property bool hasCustomApiKey: true
+    property bool legacyAvailable: true
+    property string aiTestStatus: "Connected to http://127.0.0.1:11434/v1 (qwen2.5:7b)"
+    property string statusNotice: "Imported 142 words from legacy Kelime database"
+    property string dbPath: "/home/user/.local/share/lexis/lexis.sqlite"
+  }}
+
+  TodayPage {{ id: todayPage; anchors.fill: parent; service: mockSvc; fontFamily: "Monospace" }}
+  WordsPage {{ id: wordsPage; anchors.fill: parent; service: mockSvc; fontFamily: "Monospace" }}
+  TranslatePage {{ id: translatePage; anchors.fill: parent; service: mockSvc; fontFamily: "Monospace" }}
+  StatsPage {{ id: statsPage; anchors.fill: parent; service: mockSvc; fontFamily: "Monospace" }}
+  ListsPage {{ id: listsPage; anchors.fill: parent; service: mockSvc; fontFamily: "Monospace" }}
+  SettingsPage {{ id: settingsPage; anchors.fill: parent; service: mockSvc; fontFamily: "Monospace" }}
+
+  TestCase {{
+    name: "PageLayoutOverflowTests"
+    when: windowShown
+
+    function collectIssues(node, pageName, issues) {{
+      if (!node || !node.visible || node.opacity <= 0) return
+      var kids = node.children || []
+      var isFlickableContent = !!(node.parent && node.parent.contentItem === node)
+      // 1) Check children overflowing any explicit-width parent container (unless parent clips scrollable content)
+      if (node.width > 0 && !node.clip && node.contentItem === undefined) {{
+        for (var i = 0; i < kids.length; i++) {{
+          var ch = kids[i]
+          if (!ch || !ch.visible || ch.opacity <= 0 || ch.width <= 0 || ch.height <= 0) continue
+          if (isFlickableContent && String(ch).indexOf("QQuickItem") === 0 && (!ch.children || ch.children.length === 0)) continue
+          if (ch.x + ch.width > node.width + 1.5) {{
+            issues.push(pageName + ": child (" + Math.round(ch.x) + "+" + Math.round(ch.width) + "=" + Math.round(ch.x + ch.width)
+              + ") overflows parent width " + Math.round(node.width)
+              + (ch.text !== undefined ? (" text='" + ch.text + "'") : ""))
+          }}
+        }}
+      }}
+      // 2) Check unclipped Text inside a button/badge Rectangle overflowing its parent Rectangle
+      if (node.text !== undefined && node.parent && node.parent.width > 0 && !node.parent.clip && node.elide === Text.ElideNone && node.wrapMode === Text.NoWrap) {{
+        if (node.implicitWidth > node.parent.width + 1.5) {{
+          issues.push(pageName + ": Text '" + node.text + "' implicitWidth " + Math.round(node.implicitWidth)
+            + " > parent width " + Math.round(node.parent.width))
+        }}
+      }}
+      // 3) Check sibling horizontal overlap inside non-Row/Flow/Column Item headers (left vs right anchored blocks)
+      var cls = String(node)
+      if (!isFlickableContent && cls.indexOf("QQuickItem") === 0 && kids.length === 2) {{
+        var a = kids[0], b = kids[1]
+        var aIsArea = String(a).indexOf("QQuickMouseArea") === 0
+        var bIsArea = String(b).indexOf("QQuickMouseArea") === 0
+        if (!aIsArea && !bIsArea && a && b && a.visible && b.visible && a.width > 0 && b.width > 0 && a.height > 0 && b.height > 0) {{
+          var leftItem = a.x <= b.x ? a : b
+          var rightItem = a.x <= b.x ? b : a
+          var vOverlap = Math.min(leftItem.y + leftItem.height, rightItem.y + rightItem.height) - Math.max(leftItem.y, rightItem.y)
+          if (vOverlap > 2 && (leftItem.x + leftItem.width) > (rightItem.x - 2)) {{
+            issues.push(pageName + ": header siblings overlap (" + Math.round(leftItem.x + leftItem.width)
+              + " > " + Math.round(rightItem.x) + ")")
+          }}
+        }}
+      }}
+      for (var j = 0; j < kids.length; j++) {{
+        collectIssues(kids[j], pageName, issues)
+      }}
+    }}
+
+    function test_no_horizontal_overflow_across_pages_and_languages() {{
+      var combos = [
+        {{ w: 830, h: 680, lang: "en" }},
+        {{ w: 830, h: 680, lang: "tr" }},
+        {{ w: 550, h: 520, lang: "en" }},
+        {{ w: 550, h: 520, lang: "tr" }}
+      ]
+      var allIssues = []
+      var pages = [
+        ["TodayPage", todayPage],
+        ["WordsPage", wordsPage],
+        ["TranslatePage", translatePage],
+        ["StatsPage", statsPage],
+        ["ListsPage", listsPage],
+        ["SettingsPage", settingsPage]
+      ]
+      for (var c = 0; c < combos.length; c++) {{
+        var cb = combos[c]
+        harness.width = cb.w
+        harness.height = cb.h
+        mockSvc.lang = cb.lang
+        mockSvc.todayData = ({{ answered: 0, goal: 50, totalWords: 0, recent: [] }})
+        wordsPage.formMode = ""
+        listsPage.previewData = null
+        listsPage.inspectedListName = ""
+        mockSvc.settings = {{
+          language: cb.lang,
+          themeMode: "omarchy",
+          showProgressInBar: true,
+          toastScreen: "",
+          intervalMin: 5,
+          dailyGoal: 50,
+          targetLang: "English",
+          meaningLang: "Turkish",
+          dictionaryEnabled: true,
+          aiProvider: "custom",
+          customBaseUrl: "http://127.0.0.1:11434/v1",
+          customModel: "qwen2.5:7b"
+        }}
+        wait(10)
+        for (var p = 0; p < pages.length; p++) {{
+          collectIssues(pages[p][1], pages[p][0] + "[" + cb.lang + "@" + cb.w + "]", allIssues)
+        }}
+
+        // Secondary states: Today populated, Words add-form, Lists inspector & CSV preview
+        mockSvc.todayData = ({{
+          answered: 14,
+          goal: 50,
+          totalWords: 30,
+          recent: [{{ id: 1, word: "mitigate", correct: true, qtype: "choice_word_meaning", ts: "12:04" }}]
+        }})
+        wordsPage.formMode = "add"
+        listsPage.inspectedListName = "Academic Starter Deck (Very Long Custom Deck Title)"
+        listsPage.inspectedListSource = "/tmp/starter.csv"
+        listsPage.inspectedWords = [{{ id: 1, word: "mitigate", meaning: "hafifletmek, azaltmak", box: 2 }}]
+        wait(10)
+        collectIssues(todayPage, "TodayPagePopulated[" + cb.lang + "@" + cb.w + "]", allIssues)
+        collectIssues(wordsPage, "WordsPageForm[" + cb.lang + "@" + cb.w + "]", allIssues)
+        collectIssues(listsPage, "ListsPageInspect[" + cb.lang + "@" + cb.w + "]", allIssues)
+
+        listsPage.previewData = ({{
+          kind: "csv",
+          total: 120,
+          columns: ["word", "meaning", "example", "translation"],
+          sampleRow: ["mitigate", "hafifletmek", "Trees mitigate heat.", "Ağaçlar ısıyı hafifletir."],
+          rows: [{{ word: "mitigate", meaning: "hafifletmek", example: "Trees mitigate urban heat." }}]
+        }})
+        wait(10)
+        collectIssues(listsPage, "ListsPagePreview[" + cb.lang + "@" + cb.w + "]", allIssues)
+      }}
+      verify(allIssues.length === 0, "Layout overflows detected:\\n" + allIssues.join("\\n"))
+    }}
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["QT_QPA_PLATFORM"] = "offscreen"
+        proc = subprocess.run(
+            ["/usr/lib/qt6/bin/qmltestrunner", "-import", str(mock_imports), "-input", str(qml_test)],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, f"Layout overflow test failed:\n{proc.stdout}\n{proc.stderr}")
+
 
 if __name__ == "__main__":
     unittest.main()

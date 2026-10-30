@@ -170,7 +170,8 @@ Item {
         anchors.margins: 14
         spacing: 10
 
-        Row {
+        Flow {
+          width: parent.width
           spacing: 8
 
           Text {
@@ -218,10 +219,11 @@ Item {
         // + Listeye ekle adayı
         Row {
           visible: !!(root.result && !root.result.error && root.result.candidateWord)
+          width: parent.width
           spacing: 10
 
           Rectangle {
-            width: addCandTxt.implicitWidth + 20
+            width: Math.min(outCol.width, addCandTxt.implicitWidth + 24)
             height: 28
             radius: 6
             color: addCandArea.containsMouse
@@ -233,6 +235,8 @@ Item {
             Text {
               id: addCandTxt
               anchors.centerIn: parent
+              width: Math.min(implicitWidth, parent.width - 20)
+              elide: Text.ElideRight
               text: root.addedCandidateFeedback
                 ? root.addedCandidateFeedback
                 : ("+ " + Theme.t(root.lang, "Listeye ekle: ", "Add to deck: ") + String(root.result ? (root.result.candidateWord || "") : ""))
