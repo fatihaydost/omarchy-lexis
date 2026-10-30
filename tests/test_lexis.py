@@ -339,6 +339,7 @@ class LexisCoreTests(unittest.TestCase):
         extra = prev["rows"] + [{"word": "genius", "meaning": "deha"}]
         res = self.rpc("confirm-import", {"path": str(docx), "listName": "A1", "rows": extra})
         self.assertEqual((res["added"], res["total"]), (3, 3))
+        self.assertEqual(len(res["enrichIds"]), 3)  # örneksiz kelimeler arka planda zenginleşecek
         self.assertEqual(self.rpc("preview-import", {"path": str(docx)})["duplicates"], 2)
         words = {w["word"]: w for w in self.rpc("list-words", {"name": "A1"})["words"]}
         self.assertEqual(words["dizzy"]["meaning"], "başı dönen")
@@ -354,9 +355,47 @@ class LexisCoreTests(unittest.TestCase):
             return subprocess.CompletedProcess(argv, 0, json.dumps(out), "")
 
         settings = {"aiProvider": "claude", "targetLang": "English", "meaningLang": "Turkish"}
-        ai_rows = ai_parse_lines(["curiosity -> merak"] * 31, settings, runner=fake_runner)
+        ai_rows, consumed = ai_parse_lines(["curiosity -> merak"] * 31, settings, runner=fake_runner)
         self.assertEqual(len(calls), 2)  # 30'luk parçalar
+        self.assertEqual(consumed, 31)
         self.assertEqual([(r.word, r.meaning) for r in ai_rows], [("curiosity", "merak")] * 2)
+
+        def broken_runner(argv, **kw):
+            return subprocess.CompletedProcess(argv, 1, "", "quota")
+
+        # AI başarısızsa satırlar tüketilmiş sayılmaz, önizlemede yeniden denenebilir kalır.
+        self.assertEqual(ai_parse_lines(["x y z"] * 5, settings, runner=broken_runner), ([], 0))
+
+    def test_free_form_parser_edge_cases(self) -> None:
+        from unittest import mock
+        from backend import lexis_cli
+        from backend.lexis_cli import parse_vocab_line, read_text_import, word_key
+
+        cases = {
+            "color\trenk (US)\tColor of the sky": ("color", "renk (US)", "Color of the sky"),
+            "fall - sonbahar (US), düşmek": ("fall", "sonbahar (US), düşmek", ""),
+            "1\tapple\telma": ("apple", "elma", ""),
+            "| 1 | apple | elma |": ("apple", "elma", ""),
+            "- **apple** - elma": ("apple", "elma", ""),
+            "run - koşmak (örn: hızlı)": ("run", "koşmak (örn: hızlı)", ""),
+            "dizzy (adj)   başı dönen": ("dizzy", "başı dönen", ""),
+        }
+        for line, want in cases.items():
+            row = parse_vocab_line(line)
+            self.assertIsNotNone(row, line)
+            self.assertEqual((row.word, row.meaning, row.example), want, line)
+        self.assertEqual(parse_vocab_line("dizzy (adj)   başı dönen").pos, "adjective")
+        for heading in ("Unit 1 - Food and drink", "## Unit 1: Greetings", "| Word | Meaning |"):
+            self.assertIsNone(parse_vocab_line(heading), heading)
+        self.assertEqual(word_key("  Island  Hopping "), "island hopping")
+
+        # PDF'te tek numaralı içindekiler satırı tablo çözücüyü tetiklese de serbest satırlar kaybolmaz.
+        pdf = Path(self.tmp.name, "toc.pdf")
+        pdf.write_bytes(b"%PDF-1.4")
+        toc = "1   Contents   3\nconstant (adj): sabit\ndizzy (adj): başı dönen\n"
+        with mock.patch.object(lexis_cli, "extract_text", return_value=toc):
+            rows, _ = read_text_import(pdf)
+        self.assertEqual([r.word for r in rows], ["constant", "dizzy"])
 
     def test_legacy_kelime_db_migration_and_csv_export(self) -> None:
         import sqlite3

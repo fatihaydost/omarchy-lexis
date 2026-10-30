@@ -254,8 +254,21 @@ Item {
     _pumpBg()
   }
 
+  // İçe aktarılan örneksiz kelimeler: yalnız kuyruk boşken birer birer zenginleştirilir,
+  // böylece soru değerlendirme ve çeviri gibi etkileşimli işler arkada beklemez.
+  property var _enrichBacklog: []
+
+  function queueEnrichment(ids) {
+    for (var i = 0; i < (ids || []).length; i++) _enrichBacklog.push(Number(ids[i]))
+    _pumpBg()
+  }
+
   function _pumpBg() {
-    if (_bgBusy || _bgQueue.length === 0) return
+    if (_bgBusy) return
+    if (_bgQueue.length === 0 && _enrichBacklog.length > 0) {
+      _bgQueue.push({ cmd: "enrich-word", payload: _queryStatePayload({ wordId: _enrichBacklog.shift(), background: true }), onDone: null })
+    }
+    if (_bgQueue.length === 0) return
     _bgBusy = true
     _currentBg = _bgQueue.shift()
     bgProcess.stdinEnabled = true
@@ -643,10 +656,18 @@ Item {
     importPickerProc.running = true
   }
 
-  function previewImport(path, cols, cb, useAi) {
-    enqueueRpc("preview-import", { path: String(path || ""), columns: cols || [0, 1, 2, 3], useAi: !!useAi }, function(res) {
-      if (cb) cb(res)
-    })
+  // aiState (önceki önizlemenin aiRows/aiConsumed) verilirse AI sıradaki satırlardan devam eder.
+  // AI'lı önizleme dakikalar sürebilir: ana kuyruğu (soru, ekleme) kilitlememesi için arka plan kuyruğunda.
+  function previewImport(path, cols, cb, aiState) {
+    var payload = { path: String(path || ""), columns: cols || [0, 1, 2, 3] }
+    if (aiState) {
+      payload.useAi = true
+      payload.aiRows = aiState.aiRows || []
+      payload.aiConsumed = Number(aiState.aiConsumed) || 0
+    }
+    var done = function(res) { if (cb) cb(res) }
+    if (aiState) enqueueBgRpc("preview-import", payload, done)
+    else enqueueRpc("preview-import", payload, done)
   }
 
   // rows verilirse (CSV dışı önizleme, AI dahil) backend dosyayı yeniden çözmeden aynen ekler.
@@ -654,6 +675,7 @@ Item {
     var payload = { path: String(path || ""), listName: String(listName || ""), columns: cols || [0, 1, 2, 3] }
     if (rows) payload.rows = rows
     enqueueRpc("confirm-import", _queryStatePayload(payload), function(res) {
+      if (res && res.ok && res.enrichIds) svcRoot.queueEnrichment(res.enrichIds)
       if (cb) cb(res)
     })
   }

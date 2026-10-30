@@ -779,11 +779,15 @@ _POS_ABBR = {
     "pron": "other", "exp": "other", "phrase": "other", "idiom": "other",
 }
 _LIST_MARK_RE = re.compile(r"^\s*(?:\d{1,4}\s*[.)\-]\s*|\d{1,4}\s{2,}|[-•*·▪●–]\s+)")
-_POS_LINE_RE = re.compile(r"^(?P<w>[^()]+?)\s*\((?P<pos>[A-Za-z. ]{1,8})\)\s*[:=\-–—]?\s*(?P<m>.+)$")
-# Sıra önemli: çok sütunlu ayırıcılar önce, tek seferlik "kelime ayırıcı anlam" ayırıcıları sonra.
+_POS_LINE_RE = re.compile(r"^(?P<w>[^()\t|:=]+?)\s*\((?P<pos>[A-Za-z. ]{1,8})\)\s*[:=\-–—]?\s*(?P<m>.+)$")
+_POS_SUFFIX_RE = re.compile(r"^(?P<w>.+?)\s*\((?P<pos>[A-Za-z. ]{1,8})\)$")
+_MD_MARK_RE = re.compile(r"^#{1,6}\s+|\*\*|__|`")
+_INDEX_CELL_RE = re.compile(r"^\d{1,4}[.)]?$")
+# Sıra önemli: çok sütunlu ayırıcılar önce, tek seferlik "kelime ayırıcı anlam" ayırıcıları sonra;
+# " - " ":"dan önce gelir ki "run - koşmak (örn: hızlı)" anlamın içinden bölünmesin.
 _MULTI_SPLIT_RE = (re.compile(r"\t+"), re.compile(r"\s*\|\s*"), re.compile(r"\s{2,}"))
 _PAIR_SPLIT_RE = (
-    re.compile(r"\s*=\s*"), re.compile(r"\s*:\s+|\s*:(?=\S)"), re.compile(r"\s+[–—-]\s+"),
+    re.compile(r"\s*=\s*"), re.compile(r"\s+[–—-]\s+"), re.compile(r"\s*:\s+|\s*:(?=\S)"),
     re.compile(r"\s*;\s*"),
 )
 
@@ -862,35 +866,55 @@ def _valid_pair(word: str, meaning: str) -> bool:
     return (
         bool(word) and bool(meaning) and has_alpha(word) and has_alpha(meaning)
         and len(word) <= 48 and len(word.split()) <= 5
+        # Rakam ya da ayırıcı taşıyan "kelime" başlık/bölme hatasıdır: "Unit 1", "fall - sonbahar".
+        and not any(ch.isdigit() for ch in word)
+        and not any(sep in word for sep in (":", "=", "|", "\t", " - ", " – ", " — "))
     )
+
+
+def _known_pos(raw: str) -> str | None:
+    return _POS_ABBR.get(raw.strip(" .").lower())
+
+
+def _split_pos(word: str) -> tuple[str, str]:
+    """'constant (adj)' → ('constant', 'adjective'); tanınmayan parantez kelimede kalır."""
+    m = _POS_SUFFIX_RE.match(word)
+    if m and _known_pos(m.group("pos")) is not None:
+        return _clean_cell(m.group("w")), _known_pos(m.group("pos")) or ""
+    return word, ""
 
 
 def parse_vocab_line(line: str) -> ImportRow | None:
     """Tek satırı (kelime, anlam[, örnek, çeviri]) olarak çözer; tanınmazsa None."""
-    text = _LIST_MARK_RE.sub("", line.rstrip(), count=1).strip()
+    text = _MD_MARK_RE.sub("", line.rstrip()).strip()
+    text = _LIST_MARK_RE.sub("", text, count=1).strip()
     if not text:
         return None
-    m = _POS_LINE_RE.match(text)
-    if m:
-        word, meaning = _clean_cell(m.group("w")), _clean_cell(m.group("m"))
-        pos = _POS_ABBR.get(m.group("pos").strip(" .").lower(), "")
-        return ImportRow(word, meaning, pos=pos) if _valid_pair(word, meaning) else None
     for rx in _MULTI_SPLIT_RE:
         cells = [_clean_cell(c) for c in rx.split(text) if _clean_cell(c)]
+        if len(cells) >= 3 and _INDEX_CELL_RE.match(cells[0]):
+            cells = cells[1:]
         if len(cells) >= 2:
             if _is_header_cells(cells):
                 return None
             cells += [""] * (4 - len(cells))
-            if _valid_pair(cells[0], cells[1]):
-                return ImportRow(cells[0], cells[1], cells[2], " ".join(cells[3:]).strip())
+            word, pos = _split_pos(cells[0])
+            if _valid_pair(word, cells[1]):
+                return ImportRow(word, cells[1], cells[2], " ".join(cells[3:]).strip(), pos=pos)
+    m = _POS_LINE_RE.match(text)
+    if m and _known_pos(m.group("pos")) is not None:
+        word, meaning = _clean_cell(m.group("w")), _clean_cell(m.group("m"))
+        if _valid_pair(word, meaning):
+            return ImportRow(word, meaning, pos=_known_pos(m.group("pos")) or "")
     for rx in _PAIR_SPLIT_RE:
         parts = rx.split(text, maxsplit=1)
         if len(parts) == 2:
             word, meaning = _clean_cell(parts[0]), _clean_cell(parts[1])
             if _is_header_cells([word, meaning]):
                 return None
+            word, pos = _split_pos(word)
             if _valid_pair(word, meaning):
-                return ImportRow(word, meaning)
+                return ImportRow(word, meaning, pos=pos)
     return None
 
 
@@ -910,11 +934,16 @@ def parse_vocab_text(text: str) -> tuple[list[ImportRow], list[str]]:
     return rows, unparsed
 
 
+def word_key(word: str) -> str:
+    """Store.add_word ile aynı anahtar (UNIQUE sütunu): küçük harf + tek boşluk."""
+    return " ".join((word or "").strip().lower().split())
+
+
 def dedupe_rows(rows: list[ImportRow]) -> list[ImportRow]:
     seen: set[str] = set()
     out = []
     for r in rows:
-        key = tr_lower(r.word)
+        key = word_key(r.word)
         if key not in seen:
             seen.add(key)
             out.append(r)
@@ -945,9 +974,15 @@ IMPORT_ROWS_SCHEMA = {
 }
 
 
-def ai_parse_lines(lines: list[str], settings: dict, runner=subprocess.run) -> list[ImportRow]:
-    """Kuralların tanımadığı satırları AI ile kelime/anlam çiftlerine çevirir (en çok AI_IMPORT_MAX_LINES)."""
+def ai_parse_lines(
+    lines: list[str], settings: dict, runner=subprocess.run
+) -> tuple[list[ImportRow], int]:
+    """Tanınmayan satırların ilk AI_IMPORT_MAX_LINES kadarını AI ile çözer.
+
+    (satırlar, okunan satır sayısı) döner; ilk başarısız parçada durur ki kalan satırlar yeniden denenebilsin.
+    """
     out: list[ImportRow] = []
+    consumed = 0
     todo = lines[:AI_IMPORT_MAX_LINES]
     for i in range(0, len(todo), AI_IMPORT_CHUNK):
         chunk = todo[i : i + AI_IMPORT_CHUNK]
@@ -959,13 +994,16 @@ def ai_parse_lines(lines: list[str], settings: dict, runner=subprocess.run) -> l
             + "\n".join(chunk)
         )
         res = call_ai_structured(prompt, IMPORT_ROWS_SCHEMA, settings, runner=runner, max_tokens=3000)
-        for item in (res or {}).get("rows") or []:
+        if not isinstance(res, dict) or not isinstance(res.get("rows"), list):
+            break
+        consumed += len(chunk)
+        for item in res["rows"]:
             if not isinstance(item, dict):
                 continue
             vals = [_clean_cell(item.get(k)) for k in ("word", "meaning", "example", "translation")]
             if _valid_pair(vals[0], vals[1]):
                 out.append(ImportRow(*vals))
-    return out
+    return out, consumed
 
 
 def read_text_import(path: Path | str) -> tuple[list[ImportRow], list[str]]:
@@ -975,8 +1013,10 @@ def read_text_import(path: Path | str) -> tuple[list[ImportRow], list[str]]:
     if p.suffix.lower() == ".pdf":
         # Numaralı tablo bulunduysa sütun konumuna bakan çözücü kazanır: hücre devam satırlarını birleştirir.
         table_rows = parse_pdftotext_layout(text) or (read_pdf_rows(p) if not rows else [])
-        if table_rows:
-            return dedupe_rows(table_rows), []
+        valid = [r for r in table_rows if _valid_pair(r.word, r.meaning)]
+        # İçindekiler gibi tek bir numaralı satır her şeyi tek hücreye yapıştırabilir: geçersizse satır çözücü kalır.
+        if valid and len(valid) * 2 >= len(table_rows):
+            return dedupe_rows(valid), []
     return dedupe_rows(rows), unparsed
 
 
@@ -1021,6 +1061,7 @@ def import_file_into_store(
     name = (list_name or "").strip() or default_list_name_for(p)
     store.set_list_source(name, str(p.resolve()))
     added = 0
+    enrich_ids: list[int] = []
     for r in rows:
         wid = store.add_word(
             r.word,
@@ -1034,9 +1075,13 @@ def import_file_into_store(
         )
         if wid is not None:
             added += 1
+            if not r.example:
+                enrich_ids.append(wid)
     return {
         "ok": True,
         "listName": name,
+        # Örneksiz eklenen kelimeler: istemci bunları boşta kalan arka plan kuyruğunda tek tek zenginleştirir.
+        "enrichIds": enrich_ids,
         "added": added,
         "skipped": len(rows) - added,
         "total": len(rows),
@@ -2385,13 +2430,20 @@ def handle_command(cmd: str, payload: dict) -> dict:
             suf = p.suffix.lower()
             if suf in TEXT_SUFFIXES:
                 rows, unparsed = read_text_import(p)
-                ai_added = 0
-                if unparsed and payload.get("useAi") and ai_can_run(settings):
-                    before = len(rows)
-                    rows = dedupe_rows(rows + ai_parse_lines(unparsed, settings))
-                    ai_added = len(rows) - before
-                    unparsed = unparsed[AI_IMPORT_MAX_LINES:]
-                existing = {tr_lower(w.word) for w in store.all_words_for_export()}
+                # Önceki "AI ile oku" turlarının sonucu istemciden geri gelir; her tur sıradaki satırlardan devam eder.
+                ai_rows = rows_from_payload(payload.get("aiRows"))
+                ai_consumed = max(0, min(len(unparsed), int(payload.get("aiConsumed") or 0)))
+                ai_failed = False
+                if unparsed[ai_consumed:] and payload.get("useAi") and ai_can_run(settings):
+                    new_rows, n_done = ai_parse_lines(unparsed[ai_consumed:], settings)
+                    ai_failed = n_done == 0
+                    ai_rows += new_rows
+                    ai_consumed += n_done
+                before = len(rows)
+                rows = dedupe_rows(rows + ai_rows)
+                ai_added = len(rows) - before
+                unparsed = unparsed[ai_consumed:]
+                existing = {word_key(w.word) for w in store.all_words_for_export()}
                 return {
                     "ok": True,
                     "path": str(p),
@@ -2402,8 +2454,11 @@ def handle_command(cmd: str, payload: dict) -> dict:
                     "raw": [],
                     "unparsed": len(unparsed),
                     "unparsedSample": unparsed[:5],
-                    "duplicates": sum(1 for r in rows if tr_lower(r.word) in existing),
+                    "duplicates": sum(1 for r in rows if word_key(r.word) in existing),
                     "aiAdded": ai_added,
+                    "aiRows": [r.to_dict() for r in ai_rows],
+                    "aiConsumed": ai_consumed,
+                    "aiFailed": ai_failed,
                     "aiAvailable": ai_can_run(settings),
                 }
             cols = _normalize_columns(payload.get("columns"))
@@ -2471,12 +2526,14 @@ def handle_command(cmd: str, payload: dict) -> dict:
 
         if cmd == "enrich-word":
             wid = int(payload.get("wordId") or 0)
+            # İçe aktarma sonrası arka plan zenginleştirmesi kullanıcının seçili kelimesini değiştirmez.
+            sel_payload = payload if payload.get("background") else {**payload, "selectedWordId": wid}
             initial = store.get(wid)
             if not initial:
                 return {"ok": False, "error": "Word not found"}
             if initial.enriched and initial.meaning.strip():
                 hist = store.full_history(initial.id, answered_only=True)
-                snap = build_snapshot(store, settings, {**payload, "selectedWordId": wid})
+                snap = build_snapshot(store, settings, sel_payload)
                 snap.update(
                     {
                         "wordId": wid,
@@ -2529,6 +2586,8 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 updates["example"] = example
                 if not fresh.translation.strip() and translation:
                     updates["translation"] = translation
+                if fresh.meaning.strip():
+                    updates["enriched"] = 1
 
             if updates:
                 store.update_word(wid, **updates)
@@ -2544,7 +2603,7 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 else "none"
             )
             hist = store.full_history(after.id, answered_only=True)
-            snap = build_snapshot(store, settings, {**payload, "selectedWordId": wid})
+            snap = build_snapshot(store, settings, sel_payload)
             snap.update(
                 {
                     "wordId": wid,

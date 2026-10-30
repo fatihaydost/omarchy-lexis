@@ -17,6 +17,7 @@ Item {
   property string importListName: ""
   property var importCols: [0, 1, 2, 3]
   property bool aiReading: false
+  property int previewSeq: 0
   property string importFeedback: ""
 
   property string inspectedListName: ""
@@ -35,6 +36,8 @@ Item {
     if (previewData !== null) {
       previewData = null
       previewPath = ""
+      aiReading = false
+      previewSeq++
       return true
     }
     if (inspectedListName !== "") {
@@ -75,11 +78,19 @@ Item {
     previewPath = String(filePath)
     importCols = cols
     aiReading = !!useAi
-    var reqPath = previewPath
+    var seq = ++previewSeq
+    var aiState = useAi && previewData ? previewData : null
     service.previewImport(filePath, cols, function(res) {
+      // AI beklerken önizleme kapatıldıysa (aynı dosya yeniden açılmış olsa bile) geç gelen cevap yok sayılır.
+      if (root.previewSeq !== seq) return
       root.aiReading = false
-      // AI beklerken önizleme kapatıldıysa geç gelen cevap ekranı yeniden açmasın.
-      if (root.previewPath !== reqPath) return
+      if (aiState && !(res && res.ok)) {
+        // AI turu çöktüyse önizleme kapanmaz; satırlar yeniden denenebilir kalır.
+        var kept = Object.assign({}, root.previewData)
+        kept.aiFailed = true
+        root.previewData = kept
+        return
+      }
       if (res && res.ok) {
         root.previewData = res
         if (resetName) root.importListName = String(res.name || "Imported")
@@ -89,7 +100,7 @@ Item {
           ? String(res.error)
           : Theme.t(root.lang, "Dosya okunamadı.", "Could not read file.")
       }
-    }, useAi)
+    }, aiState)
   }
 
   function cycleColumn(slotIndex, delta) {
@@ -819,7 +830,10 @@ Item {
           elide: Text.ElideRight
           text: root.aiReading
             ? Theme.t(root.lang, "AI satırları okuyor… (bir dakika sürebilir)", "AI is reading the lines… (may take a minute)")
-            : unparsedBox.count + " " + Theme.t(root.lang, "satır okunamadı, atlanacak", "lines not recognized, will be skipped")
+            : (root.previewData && root.previewData.aiFailed
+                ? Theme.t(root.lang, "AI cevap vermedi · ", "AI did not answer · ")
+                : "")
+              + unparsedBox.count + " " + Theme.t(root.lang, "satır okunamadı, atlanacak", "lines not recognized, will be skipped")
               + (unparsedBox.canAi ? "" : Theme.t(root.lang, " · Ayarlar'dan AI açarsan okunabilir", " · enable AI in Settings to read them"))
           font.family: root.fontFamily
           font.pixelSize: 12
