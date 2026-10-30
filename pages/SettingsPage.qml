@@ -40,7 +40,6 @@ Item {
 
   readonly property string uiLanguage: cfg.language === "tr" ? "tr" : "en"
   readonly property string themeMode: cfg.themeMode === "gruvbox" ? "gruvbox" : "omarchy"
-  readonly property bool showProgressInBar: cfg.showProgressInBar !== false
   readonly property string toastScreen: String(cfg.toastScreen || "")
   readonly property int intervalMin: Math.max(1, Math.min(60, Number(cfg.intervalMin) || 5))
   readonly property int dailyGoal: Math.max(1, Math.min(500, Number(cfg.dailyGoal) || 50))
@@ -250,59 +249,14 @@ Item {
           }
         }
 
-        // Barda ilerleme + Monitör seçici
+        // Monitör seçici
         Row {
           width: parent.width
           spacing: 24
 
-          // Barda günlük sayaç göster
-          Row {
-            width: Math.floor((parent.width - 24) / 2)
-            spacing: 12
-
-            Rectangle {
-              anchors.verticalCenter: parent.verticalCenter
-              width: 36
-              height: 20
-              radius: 10
-              color: root.showProgressInBar
-                ? (root.tokens.accent || "#fe8019")
-                : (root.tokens.raised || "#504945")
-
-              Rectangle {
-                x: root.showProgressInBar ? 18 : 2
-                anchors.verticalCenter: parent.verticalCenter
-                width: 16
-                height: 16
-                radius: 8
-                color: root.showProgressInBar
-                  ? (root.tokens.primaryInk || "#1d2021")
-                  : (root.tokens.muted || "#a89984")
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  if (root.service) root.service.saveSettings({ showProgressInBar: !root.showProgressInBar })
-                }
-              }
-            }
-
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              width: parent.width - 48
-              wrapMode: Text.WordWrap
-              text: Theme.t(root.lang, "Üst barda günlük sayacı göster", "Show daily counter in bar")
-              font.family: root.fontFamily
-              font.pixelSize: 13
-              color: root.tokens.ink || "#ebdbb2"
-            }
-          }
-
           // Bildirim kartı monitörü
           Column {
-            width: Math.floor((parent.width - 24) / 2)
+            width: parent.width
             spacing: 6
 
             Text {

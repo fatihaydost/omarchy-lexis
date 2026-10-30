@@ -21,7 +21,6 @@ Item {
   property var settings: ({
     language: "en",
     themeMode: "omarchy",
-    showProgressInBar: true,
     toastScreen: "",
     intervalMin: 5,
     dailyGoal: 50,

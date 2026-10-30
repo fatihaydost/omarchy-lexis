@@ -20,18 +20,6 @@
     "description": "Ambient vocabulary flashcards, quick word capture, and daily goal progress.",
     "category": "Productivity",
     "allowMultiple": false,
-    "defaultSection": "right",
-    "schema": [
-      {
-        "key": "showProgressInBar",
-        "type": "boolean",
-        "label": "Show daily progress in bar",
-        "description": "Display answered/daily-goal counter next to the l. mark.",
-        "defaultValue": true
-      }
-    ],
-    "defaults": {
-      "showProgressInBar": true
-    }
+    "defaultSection": "right"
   }
 }

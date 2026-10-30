@@ -8,7 +8,7 @@ import "Theme.js" as Theme
 import "components"
 
 // Omarchy üst bar bileşeni (monitör başına omarchy.bar tarafından oluşturulur).
-// "l." marka işaretini ve isteğe bağlı günlük cevaplanan/hedef sayacını sabit genişlikte çizer.
+// "l." marka işaretini çizer; günlük sayaç yalnız ipucunda ve açılır panelde.
 Ui.BarWidget {
   id: root
   moduleName: "io.github.fatihaydost.lexis"
@@ -43,11 +43,7 @@ Ui.BarWidget {
   readonly property string lang: svc ? svc.lang : "en"
   readonly property int answered: svc && svc.todayData ? (Number(svc.todayData.answered) || 0) : 0
   readonly property int goal: svc && svc.todayData ? Math.max(1, Number(svc.todayData.goal) || 50) : 50
-  readonly property bool showBarPref: root.setting("showProgressInBar", true) !== false
-  readonly property bool showAppPref: !(svc && svc.settings && svc.settings.showProgressInBar === false)
-  readonly property bool progressVisible: showBarPref && showAppPref
   readonly property string counterText: answered + "/" + goal
-  readonly property string metricsTemplate: (answered >= 100 || goal >= 100) ? "999/999" : "99/99"
 
   readonly property string tooltipText: {
     if (!svc) return "Lexis"
@@ -60,16 +56,7 @@ Ui.BarWidget {
   readonly property color fgColor: root.bar ? root.bar.barForeground : Commons.Color.foreground
   readonly property color accentColor: Commons.Color.accent
 
-  TextMetrics {
-    id: counterMetrics
-    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-    font.pixelSize: Style.font.body
-    text: root.metricsTemplate
-  }
-
-  readonly property real reservedContentWidth: progressVisible
-    ? (glyphMark.implicitWidth + Style.space(5) + Math.ceil(counterMetrics.width))
-    : glyphMark.implicitWidth
+  readonly property real reservedContentWidth: glyphMark.implicitWidth
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -123,17 +110,6 @@ Ui.BarWidget {
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
       }
 
-      Text {
-        visible: root.progressVisible && !root.vertical
-        width: Math.ceil(counterMetrics.width)
-        anchors.verticalCenter: parent.verticalCenter
-        horizontalAlignment: Text.AlignLeft
-        text: root.counterText
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-        font.pixelSize: Style.font.body
-        renderType: Text.NativeRendering
-        color: root.fgColor
-      }
     }
   }
 }

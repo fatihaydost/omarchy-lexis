@@ -806,7 +806,6 @@ Item {{
     property var settings: ({{
       language: lang,
       themeMode: "omarchy",
-      showProgressInBar: true,
       toastScreen: "",
       intervalMin: 5,
       dailyGoal: 50,
@@ -912,7 +911,6 @@ Item {{
         mockSvc.settings = {{
           language: cb.lang,
           themeMode: "omarchy",
-          showProgressInBar: true,
           toastScreen: "",
           intervalMin: 5,
           dailyGoal: 50,
