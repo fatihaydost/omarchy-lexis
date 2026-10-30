@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.fatihaydost.lexis",
+  "name": "Lexis",
+  "version": "1.0.0",
+  "author": "Fatih Aydost",
+  "license": "MIT",
+  "description": "Ambient vocabulary habit plugin for Omarchy with non-intrusive corner question cards, spaced repetition, multilingual CSV/PDF word decks, hybrid Free Dictionary lookup, and optional CLI or local AI support.",
+  "homepage": "https://github.com/fatihaydost/omarchy-lexis",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Lexis",
+    "description": "Ambient vocabulary flashcards, quick word capture, and daily goal progress.",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "schema": [
+      {
+        "key": "showProgressInBar",
+        "type": "boolean",
+        "label": "Show daily progress in bar",
+        "description": "Display answered/daily-goal counter next to the l. mark.",
+        "defaultValue": true
+      }
+    ],
+    "defaults": {
+      "showProgressInBar": true
+    }
+  }
+}
