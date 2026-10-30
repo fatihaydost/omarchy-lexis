@@ -34,7 +34,7 @@ Lexis builds a quiet, everyday vocabulary habit while you work. Every few minute
 omarchy plugin add https://github.com/fatihaydost/omarchy-lexis --enable
 ```
 
-Then add **Lexis** (`l.`) to your top bar from Omarchy Bar Settings (or click the `l. 0/50` indicator on the right side of the bar: **left-click** opens the quick popout, **right-click** opens the full desktop window, **middle-click** draws a question immediately).
+Then add **Lexis** (`l.`) to your top bar from Omarchy Bar Settings (or click the `l.` indicator on the right side of the bar: **left-click** opens the quick popout, **right-click** opens the full desktop window, **middle-click** draws a question immediately).
 
 To remove the plugin cleanly:
 

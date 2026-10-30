@@ -34,7 +34,7 @@ Lexis, bilgisayar başında çalışırken araya girmeyen bir kelime öğrenme a
 omarchy plugin add https://github.com/fatihaydost/omarchy-lexis --enable
 ```
 
-Üst barda sağ taraftaki `l. 0/50` göstergesine **sol tık** hızlı açılır menüyü, **sağ tık** 6 sekmeli ana pencereyi açar, **orta tık** hemen yeni soru çeker.
+Üst barda sağ taraftaki `l.` göstergesine **sol tık** hızlı açılır menüyü, **sağ tık** 6 sekmeli ana pencereyi açar, **orta tık** hemen yeni soru çeker.
 
 Eklentiyi kaldırmak için:
 

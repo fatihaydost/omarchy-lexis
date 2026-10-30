@@ -123,7 +123,7 @@ Item {
         spacing: 12
 
         Text {
-          text: Theme.t(root.lang, "GÖRÜNÜM VE ÜST BAR", "APPEARANCE & BAR")
+          text: Theme.t(root.lang, "GÖRÜNÜM", "APPEARANCE")
           font.family: root.fontFamily
           font.pixelSize: 11
           font.weight: Font.DemiBold
