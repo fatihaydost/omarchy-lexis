@@ -3,7 +3,9 @@
 > Ambient vocabulary habit plugin for **Omarchy 4.x** (`omarchy-shell` / Quickshell + Hyprland).
 > Türkçe dokümantasyon: [`README.tr.md`](./README.tr.md)
 
-![Lexis Preview](./preview.png)
+<p align="center">
+  <img src="assets/flow.gif" width="880" alt="A new-word card, then a multiple-choice question answered in the top-right corner while a document stays in focus">
+</p>
 
 Lexis builds a quiet, everyday vocabulary habit while you work. Every few minutes (default **5 min**), a small notification-like question card appears in the top-right corner **without stealing keyboard focus** from your terminal, editor, or browser — and stays patiently until you answer, skip (`✕`), or hide (`Don't show again`) the word.
 
@@ -25,6 +27,29 @@ Lexis builds a quiet, everyday vocabulary habit while you work. Every few minute
   - **Optional Local / Custom `/v1` endpoint:** 1-click presets for **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`), and **OpenRouter**, with live `/v1/models` discovery.
 - **Word list import from CSV, TSV, PDF, DOCX, ODT, TXT & MD:** Recognizes common list shapes (`word - meaning`, `word = meaning`, `word (adj): meaning`, numbered/bulleted lines, tables, multi-line PDF tables via `pdftotext -layout`) and shows a full preview with skipped lines and duplicates before importing; unrecognized lines can optionally be read with your AI provider. Also includes a built-in 30-word academic starter deck, interactive 4-column CSV mapper, CSV backup export, and 1-click migration from legacy `kelime.db`.
 - **Live Omarchy theme sync:** Adapts automatically to your active Omarchy theme (`Commons.Color`).
+
+### Capture a word while you read
+
+Select a word anywhere and press `SUPER + SHIFT + X`: Lexis adds it to your `Custom` deck and fills in its meaning and an example sentence from the free dictionary.
+
+<p align="center">
+  <img src="assets/capture.gif" width="880" alt="Selecting a word in a document, capturing it with SUPER + SHIFT + X and seeing it in the Words page">
+</p>
+
+### The main window
+
+<p align="center">
+  <img src="assets/panel-today.png" width="49%" alt="Today page">
+  <img src="assets/panel-words.png" width="49%" alt="Words page">
+</p>
+<p align="center">
+  <img src="assets/panel-stats.png" width="49%" alt="Statistics page">
+  <img src="assets/panel-translate.png" width="49%" alt="Translate page">
+</p>
+<p align="center">
+  <img src="assets/panel-lists.png" width="49%" alt="Lists page">
+  <img src="assets/panel-settings.png" width="49%" alt="Settings page">
+</p>
 
 ---
 
@@ -89,6 +114,8 @@ o.bind("SUPER + ALT + ESCAPE", "Skip active Lexis card", "omarchy-shell lexis di
 - **Preferences:** `~/.config/lexis/settings.json`
 - **Optional `/v1` API key (`0600`):** `~/.local/state/lexis/api_key`
 - **Runtime tools (standard on Omarchy 4.x):** `python3` (stdlib only — zero `pip` packages), `wl-paste` (`wl-clipboard`, for selection capture), `zenity` (for native file open/save dialogs), and `pdftotext` (`poppler`, optional, for PDF table imports).
+
+- **README media:** the GIFs and screenshots come from the plugin itself running on sample data. `zsh media/record/make_media.sh` records them on an empty workspace without touching your own data, and [Remotion](https://www.remotion.dev) in `media/` frames the recordings and turns them into GIFs (see `media/README.md`).
 
 ---
 

@@ -1,0 +1,65 @@
+{
+  "flow": {
+    "clip": "flow.mp4",
+    "outWidth": 880,
+    "outHeight": 495,
+    "trim": {
+      "startSec": 0.4,
+      "endSec": 15.6
+    },
+    "camera": [
+      {
+        "atSec": 0,
+        "x": 0,
+        "y": 42,
+        "w": 1920,
+        "h": 1023
+      },
+      {
+        "atSec": 0.6,
+        "x": 0,
+        "y": 42,
+        "w": 1920,
+        "h": 1023
+      },
+      {
+        "atSec": 1.8,
+        "x": 1080,
+        "y": 36,
+        "w": 840,
+        "h": 473
+      }
+    ],
+    "gif": {
+      "colors": 128
+    }
+  },
+  "capture": {
+    "clip": "capture.mp4",
+    "outWidth": 880,
+    "outHeight": 495,
+    "trim": {
+      "startSec": 0.4,
+      "endSec": 11.6
+    },
+    "camera": [
+      {
+        "atSec": 0,
+        "x": 0,
+        "y": 42,
+        "w": 1920,
+        "h": 1023
+      }
+    ],
+    "captions": [
+      {
+        "fromSec": 2.6,
+        "toSec": 5.2,
+        "text": "SUPER + SHIFT + X"
+      }
+    ],
+    "gif": {
+      "colors": 128
+    }
+  }
+}

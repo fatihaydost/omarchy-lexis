@@ -3,7 +3,9 @@
 > **Omarchy 4.x** (`omarchy-shell` / Quickshell + Hyprland) için odak çalmayan, sağ üst bildirim kartlarıyla çalışan kelime alışkanlığı eklentisi.
 > English documentation: [`README.md`](./README.md)
 
-![Lexis Önizleme](./preview.png)
+<p align="center">
+  <img src="assets/flow.gif" width="880" alt="Bir belge odakta kalırken sağ üst köşede yeni kelime kartı ve ardından cevaplanan şıklı soru">
+</p>
 
 Lexis, bilgisayar başında çalışırken araya girmeyen bir kelime öğrenme alışkanlığı kurar. Belirlediğin aralıklarla (varsayılan **5 dk**) sağ üst köşede bildirim benzeri küçük bir soru kartı belirir; terminalinden veya editöründen **klavye odağını çalmaz** ve sen cevaplayana, `✕` ile atlayana ya da `Bir daha gösterme` ile gizleyene kadar kendiliğinden kaybolmaz.
 
@@ -25,6 +27,29 @@ Lexis, bilgisayar başında çalışırken araya girmeyen bir kelime öğrenme a
   - **Yerel / Özel `/v1` uç noktası:** **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`) ve **OpenRouter** için tek tık ön ayarlar ve canlı `/v1/models` model listeleme.
 - **CSV, TSV, PDF, DOCX, ODT, TXT ve MD kelime listesi içe aktarma:** Yaygın liste biçimlerini tanır (`kelime - anlam`, `kelime = anlam`, `kelime (adj): anlam`, numaralı/madde işaretli satırlar, tablolar, `pdftotext -layout` ile çok satırlı PDF tabloları); eklemeden önce atlanan satırları ve zaten kayıtlı kelimeleri gösteren tam önizleme sunar, tanınmayan satırlar isteğe bağlı olarak AI sağlayıcınla okunur. Ayrıca 30 kelimelik yerleşik akademik başlangıç destesi, 4 sütun CSV eşleyici, CSV yedek dışa aktarma ve eski `kelime.db` veritabanından tek tık taşıma.
 - **Canlı Omarchy teması:** Aktif Omarchy temasına (`Commons.Color`) canlı uyum sağlar.
+
+### Okurken kelime yakala
+
+Herhangi bir yerde bir kelimeyi seçip `SUPER + SHIFT + X` bas: Lexis onu `Custom` destene ekler, anlamını ve örnek cümlesini ücretsiz sözlükten doldurur.
+
+<p align="center">
+  <img src="assets/capture.gif" width="880" alt="Belgede kelime seçip SUPER + SHIFT + X ile yakalama ve Kelimeler sayfasında görme">
+</p>
+
+### Ana pencere
+
+<p align="center">
+  <img src="assets/panel-today.png" width="49%" alt="Bugün sayfası">
+  <img src="assets/panel-words.png" width="49%" alt="Kelimeler sayfası">
+</p>
+<p align="center">
+  <img src="assets/panel-stats.png" width="49%" alt="İstatistikler sayfası">
+  <img src="assets/panel-translate.png" width="49%" alt="Çeviri sayfası">
+</p>
+<p align="center">
+  <img src="assets/panel-lists.png" width="49%" alt="Listeler sayfası">
+  <img src="assets/panel-settings.png" width="49%" alt="Ayarlar sayfası">
+</p>
 
 ---
 
@@ -79,6 +104,8 @@ o.bind("SUPER + SHIFT + X", "Seçili kelimeyi Lexis'e ekle", "omarchy-shell lexi
 - **Veritabanı:** `~/.local/share/lexis/lexis.sqlite`
 - **Ayarlar:** `~/.config/lexis/settings.json`
 - **İsteğe bağlı `/v1` API anahtarı (`0600`):** `~/.local/state/lexis/api_key`
+
+- **README görselleri:** GIF'ler ve ekran görüntüleri eklentinin kendisinden, örnek veriyle alınır. `zsh media/record/make_media.sh` bunları boş bir çalışma alanında, senin verine dokunmadan kaydeder; `media/` içindeki [Remotion](https://www.remotion.dev) kayıtları çerçeveleyip GIF'e çevirir (bkz. `media/README.md`).
 
 ---
 

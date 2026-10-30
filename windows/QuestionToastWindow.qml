@@ -557,7 +557,7 @@ Item {
               text: {
                 if (!root.feedback) return ""
                 if (root.feedback.infoOnly) return String(root.feedback.headline || "")
-                return String(root.feedback.word || "") + " — " + String(root.feedback.rightAnswer || "")
+                return String(root.feedback.word || "") + " — " + String(root.feedback.meaning || root.feedback.rightAnswer || "")
               }
               wrapMode: Text.WordWrap
               font.family: root.fontFamily
