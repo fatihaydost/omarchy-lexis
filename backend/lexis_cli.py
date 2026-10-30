@@ -1235,9 +1235,11 @@ def candidate_word_for_translation(text: str, translation: str, source: str) -> 
     if source == "target":
         tokens = clean_in.split()
         return clean_in if 1 <= len(tokens) <= 4 else None
+    if "," in clean_in or len(clean_in.split()) > 2:
+        return None
     first_chunk = clean_out.split(",")[0].strip()
     tokens = first_chunk.split()
-    return first_chunk if 1 <= len(tokens) <= 2 else None
+    return first_chunk if 1 <= len(tokens) <= 4 else None
 
 
 def hybrid_translate_text(text: str, settings: dict, runner=subprocess.run) -> dict | None:

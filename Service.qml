@@ -16,7 +16,7 @@ Item {
 
   property var shell: null
   property var manifest: null
-  property var mainPanelRef: null
+  property var mainPanelRef: mainPanelWin
 
   property var settings: ({
     language: "en",
@@ -846,6 +846,12 @@ Item {
 
   QuestionToastWindow {
     id: toastWin
+    service: svcRoot
+    fontFamily: Style.font.family
+  }
+
+  MainPanelWindow {
+    id: mainPanelWin
     service: svcRoot
     fontFamily: Style.font.family
   }
