@@ -532,6 +532,115 @@ class LexisCoreTests(unittest.TestCase):
             srv.shutdown()
             srv.server_close()
 
+    def test_marketplace_manifest_qml_and_security_baseline(self) -> None:
+        import re
+
+        required_files = [
+            "manifest.json",
+            "LICENSE",
+            "SECURITY.md",
+            "README.md",
+            "README.tr.md",
+            "preview.png",
+        ]
+        for rel in required_files:
+            self.assertTrue((ROOT / rel).is_file(), f"Missing required file: {rel}")
+
+        manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest.get("schemaVersion"), 1)
+        self.assertEqual(manifest.get("id"), "io.github.fatihaydost.lexis")
+        self.assertEqual(manifest.get("name"), "Lexis")
+        entry_points = manifest.get("entryPoints") or {}
+        for ep_key in ("service", "barWidget"):
+            ep_rel = entry_points.get(ep_key)
+            self.assertTrue(ep_rel and (ROOT / ep_rel).is_file(), f"Missing entryPoint {ep_key}")
+
+        preview_file = ROOT / "preview.png"
+        preview_bytes = preview_file.read_bytes()
+        self.assertTrue(preview_bytes.startswith(b"\x89PNG\r\n\x1a\n"), "preview.png is not a valid PNG")
+        self.assertLess(len(preview_bytes), 250 * 1024, "preview.png must be < 250 KiB")
+
+        # Validate via omarchy CLI
+        val_proc = subprocess.run(
+            ["omarchy", "plugin", "validate", str(ROOT)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(val_proc.returncode, 0, f"omarchy plugin validate failed: {val_proc.stdout} {val_proc.stderr}")
+
+        # Walk repo files and enforce Marketplace security & hygiene rules
+        forbidden_name_re = re.compile(r"(install|installer|setup|uninstall)", re.IGNORECASE)
+        forbidden_cmd_re = re.compile(
+            r"(\bsudo\b|\bpkexec\b|\bsystemctl\b|\bsystemd-run\b|\bpacman\s+-S\b|\bapt-get\b|curl\b[^\n]*\|\s*(?:ba)?sh\b)"
+        )
+        fractional_px_re = re.compile(r"pixelSize\s*:\s*\d+\.\d+")
+
+        qml_files: list[str] = []
+        for path in sorted(ROOT.rglob("*")):
+            rel_parts = path.relative_to(ROOT).parts
+            if any(p in (".git", ".superpowers", "__pycache__") for p in rel_parts):
+                continue
+            self.assertFalse(path.is_symlink(), f"Symlinks are forbidden in Marketplace plugins: {path}")
+            if path.is_dir():
+                continue
+
+            self.assertIsNone(
+                forbidden_name_re.search(path.name),
+                f"Forbidden installer-like filename in repo: {path.name}",
+            )
+            st = path.stat()
+            self.assertEqual(st.st_mode & 0o111, 0, f"Executable bit forbidden on plugin file: {path}")
+            self.assertLess(st.st_size, 512 * 1024, f"File exceeds 512 KiB limit: {path}")
+
+            if path.suffix == ".qml":
+                qml_files.append(str(path.relative_to(ROOT)))
+                qml_txt = path.read_text(encoding="utf-8")
+                self.assertIsNone(
+                    fractional_px_re.search(qml_txt),
+                    f"Fractional font.pixelSize in {path}",
+                )
+
+            if path.resolve() != Path(__file__).resolve() and path.suffix in (
+                ".py",
+                ".qml",
+                ".js",
+                ".json",
+                ".md",
+                ".csv",
+            ):
+                txt = path.read_text(encoding="utf-8")
+                m = forbidden_cmd_re.search(txt)
+                self.assertIsNone(m, f"Forbidden privileged/package pattern {m.group(0) if m else ''} in {path}")
+
+        self.assertGreaterEqual(len(qml_files), 12)
+        lint_proc = subprocess.run(
+            [
+                "/usr/lib/qt6/bin/qmllint",
+                "--bare",
+                "-I",
+                "/usr/lib/qt6/qml",
+                "-I",
+                "/usr/share/omarchy/shell",
+                "--unqualified",
+                "disable",
+                "--import",
+                "disable",
+                "--unresolved-type",
+                "disable",
+                "--uncreatable-type",
+                "disable",
+                *qml_files,
+            ],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(lint_proc.returncode, 0, f"qmllint failed: {lint_proc.stdout}\n{lint_proc.stderr}")
+        self.assertEqual(lint_proc.stdout.strip(), "", f"qmllint stdout not empty: {lint_proc.stdout}")
+        self.assertEqual(lint_proc.stderr.strip(), "", f"qmllint stderr not empty: {lint_proc.stderr}")
+
 
 if __name__ == "__main__":
     unittest.main()

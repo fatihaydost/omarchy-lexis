@@ -141,6 +141,7 @@ Item {
   function showTab(tabKey) {
     var norm = _normalizeTabKey(tabKey)
     if (norm) currentTab = norm
+    if (service) service.refreshSnapshot(null)
     var nextScreen = _resolveFocusedScreen()
     var nextMonName = nextScreen && nextScreen.name ? String(nextScreen.name) : ""
     var nextWsId = _currentWorkspaceId()

@@ -829,6 +829,11 @@ Item {
       return "ok"
     }
 
+    function reload(): string {
+      svcRoot.refreshSnapshot(null)
+      return "ok"
+    }
+
     function status(): string {
       return JSON.stringify({
         answered: svcRoot.todayData ? (svcRoot.todayData.answered || 0) : 0,
