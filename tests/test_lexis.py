@@ -641,6 +641,87 @@ class LexisCoreTests(unittest.TestCase):
         self.assertEqual(lint_proc.stdout.strip(), "", f"qmllint stdout not empty: {lint_proc.stdout}")
         self.assertEqual(lint_proc.stderr.strip(), "", f"qmllint stderr not empty: {lint_proc.stderr}")
 
+    def test_short_word_root_swap_guard(self) -> None:
+        from backend.lexis_cli import match_answer
+
+        # Distinct 5-6 letter Turkish verbs sharing -mak/-mek must NOT match via 1-char edit distance
+        self.assertFalse(match_answer("almak", "kalmak"))
+        self.assertFalse(match_answer("almak", "salmak"))
+        self.assertFalse(match_answer("atmak", "batmak"))
+        self.assertFalse(match_answer("satmak", "atmak"))
+        self.assertFalse(match_answer("make", "take"))
+        # Genuine mid/ending typo with matching initial character still matches on >=6 char meanings
+        self.assertTrue(match_answer("kalmk", "kalmak"))
+        self.assertTrue(match_answer("hafifletmk", "hafifletmek"))
+
+    def test_distractors_do_not_overlap_each_other(self) -> None:
+        # Target 'fragile' + 3 candidates where 'swift' and 'rapid' share normalized token 'cabuk'
+        w_target = self.rpc("add-word", {"word": "fragile", "meaning": "kırılgan", "pos": "adjective"})["wordId"]
+        w_swift = self.rpc("add-word", {"word": "swift", "meaning": "hızlı, çabuk", "pos": "adjective"})["wordId"]
+        w_rapid = self.rpc("add-word", {"word": "rapid", "meaning": "çabuk, seri", "pos": "adjective"})["wordId"]
+        w_opaque = self.rpc("add-word", {"word": "opaque", "meaning": "mat", "pos": "adjective"})["wordId"]
+        for wid in (w_target, w_swift, w_rapid, w_opaque):
+            self.rpc("grade-question", {"wordId": wid, "qtype": "intro", "action": "intro", "now": 100.0})
+
+        # Only 2 mutually non-overlapping distractors exist -> must fall back to typed instead of picking both swift & rapid
+        q_only_two = self.rpc("next-question", {"wordId": w_target, "now": 800.0})["question"]
+        self.assertEqual(q_only_two["qtype"], "type_word_meaning")
+
+        # Once a 3rd distinct distractor is added, 4-choice works and never includes both swift/hızlı and rapid/çabuk together
+        w_dense = self.rpc("add-word", {"word": "dense", "meaning": "yoğun", "pos": "adjective"})["wordId"]
+        self.rpc("grade-question", {"wordId": w_dense, "qtype": "intro", "action": "intro", "now": 100.0})
+        for i in range(20):
+            q = self.rpc("next-question", {"wordId": w_target, "now": 900.0 + i, "seed": i})["question"]
+            self.assertIn(q["qtype"], ("choice_word_meaning", "choice_meaning_word"))
+            self.assertEqual(len(q["choices"]), 4)
+            choices_set = set(q["choices"])
+            self.assertFalse({"swift", "rapid"}.issubset(choices_set))
+            self.assertFalse({"hızlı", "çabuk"}.issubset(choices_set))
+
+    def test_scheduled_timer_defers_replacement_while_user_typing_or_judging(self) -> None:
+        bridge_url = (ROOT / "Bridge.js").as_uri()
+        qml_test = Path(self.tmp.name) / "tst_quiz_tick.qml"
+        qml_test.write_text(
+            f"""import QtQuick
+import QtTest
+import "{bridge_url}" as Bridge
+
+TestCase {{
+  name: "QuizTickDeferTests"
+
+  function test_defers_when_input_active_or_judging() {{
+    compare(typeof Bridge.decideQuizTick, "function")
+    var dTyping = Bridge.decideQuizTick(1500, 1000, 300, 0, false, true, true, false)
+    compare(dTyping.action, "defer_typing")
+    compare(dTyping.nextLastEpoch, 1230)
+
+    var dJudging = Bridge.decideQuizTick(1500, 1000, 300, 0, false, true, false, true)
+    compare(dJudging.action, "defer_typing")
+    compare(dJudging.nextLastEpoch, 1230)
+
+    var dIdleCard = Bridge.decideQuizTick(1500, 1000, 300, 0, false, true, false, false)
+    compare(dIdleCard.action, "draw")
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["QT_QPA_PLATFORM"] = "offscreen"
+        proc = subprocess.run(
+            ["/usr/lib/qt6/bin/qmltestrunner", "-input", str(qml_test)],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, f"qmltestrunner failed:\n{proc.stdout}\n{proc.stderr}")
+
+        svc_txt = (ROOT / "Service.qml").read_text(encoding="utf-8")
+        self.assertIn("Bridge.decideQuizTick(", svc_txt)
+        self.assertIn("toastWin.inputActive", svc_txt)
+        self.assertIn("svcRoot.judging", svc_txt)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -547,8 +547,11 @@ def match_answer(answer: str, meaning: str) -> bool:
             continue
         if a == p:
             return True
-        if len(a) >= 4 and len(p) >= 5 and _levenshtein(a, p) <= (2 if len(p) >= 10 else 1):
-            return True
+        if len(a) >= 5 and len(p) >= 6:
+            max_dist = 2 if len(p) >= 10 else 1
+            dist = _levenshtein(a, p)
+            if dist <= max_dist and not (dist == 1 and len(p) <= 7 and a[0] != p[0]):
+                return True
     return False
 
 
@@ -1687,11 +1690,14 @@ def _select_distractors(store: Store, word: Word, rng: random.Random) -> list[Wo
     candidates.sort(key=lambda w: (w.pos != word.pos, w.list_id != word.list_id))
     chosen: list[Word] = []
     seen_labels = {own_label}
+    seen_parts = set(own_parts)
     for w in candidates:
         lbl = fold_ascii(choice_label(w.meaning))
-        if lbl and lbl not in seen_labels:
+        w_parts = {fold_ascii(p) for p in meaning_parts(w.meaning) if fold_ascii(p)}
+        if lbl and lbl not in seen_labels and not (seen_parts & w_parts):
             chosen.append(w)
             seen_labels.add(lbl)
+            seen_parts.update(w_parts)
         if len(chosen) == 3:
             break
     return chosen

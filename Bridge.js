@@ -58,3 +58,16 @@ function windowScreenName(winObj) {
   var scr = winObj.screen
   return (scr && scr.name) ? String(scr.name) : ""
 }
+
+function decideQuizTick(nowSec, lastQuizEpoch, intervalSec, mutedUntil, systemPaused, hasActiveQuestion, inputActive, judging) {
+  if (mutedUntil > nowSec || systemPaused) {
+    return { action: "reset_epoch", nextLastEpoch: nowSec }
+  }
+  if ((nowSec - lastQuizEpoch) < intervalSec) {
+    return { action: "countdown", nextLastEpoch: lastQuizEpoch }
+  }
+  if (hasActiveQuestion && (inputActive || judging)) {
+    return { action: "defer_typing", nextLastEpoch: nowSec - intervalSec + 30 }
+  }
+  return { action: "draw", nextLastEpoch: nowSec }
+}

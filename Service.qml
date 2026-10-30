@@ -132,15 +132,20 @@ Item {
     onTriggered: {
       var nowSec = Math.floor(Date.now() / 1000)
       var mu = svcRoot.settings && svcRoot.settings.mutedUntil ? Number(svcRoot.settings.mutedUntil) : 0
-      if (mu > nowSec || svcRoot._isSystemPaused()) {
-        // Kilit, DND veya susturma dönüşünde birikmiş soruları yağdırmamak için sayacı sıfırla
-        svcRoot._lastQuizEpoch = nowSec
-        svcRoot._recomputeCountdown()
-        return
-      }
-      if ((nowSec - svcRoot._lastQuizEpoch) >= svcRoot._intervalSeconds()) {
+      var dec = Bridge.decideQuizTick(
+        nowSec,
+        svcRoot._lastQuizEpoch,
+        svcRoot._intervalSeconds(),
+        mu,
+        svcRoot._isSystemPaused(),
+        svcRoot.activeQuestion !== null,
+        toastWin.inputActive,
+        svcRoot.judging
+      )
+      if (dec.action === "draw") {
         svcRoot._drawScheduledQuestion()
       } else {
+        svcRoot._lastQuizEpoch = dec.nextLastEpoch
         svcRoot._recomputeCountdown()
       }
     }
