@@ -104,6 +104,8 @@ o.bind("SUPER + SHIFT + X", "Seçili kelimeyi Lexis'e ekle", "omarchy-shell lexi
 - **Veritabanı:** `~/.local/share/lexis/lexis.sqlite`
 - **Ayarlar:** `~/.config/lexis/settings.json`
 - **İsteğe bağlı `/v1` API anahtarı (`0600`):** `~/.local/state/lexis/api_key`
+- **Çalışma araçları:** `python3` (yalnız standart kütüphane, `pip` paketi yok), `wl-paste` (`wl-clipboard`, seçim yakalama) ve `pdftotext` (`poppler`, PDF içe aktarma) Omarchy 4.x ile gelir.
+- **İsteğe bağlı `zenity`:** Omarchy temel kurulumunda yok. Kuruluysa `Dosya aktar…` ve `CSV dışa aktar` dosya penceresi açar; değilse Listeler sayfasına dosya yolunu yapıştırırsın, dışa aktarma `~/lexis-words.csv` dosyasına yazılır.
 
 - **README görselleri:** GIF'ler ve ekran görüntüleri eklentinin kendisinden, örnek veriyle alınır. `zsh media/record/make_media.sh` bunları boş bir çalışma alanında, senin verine dokunmadan kaydeder; `media/` içindeki [Remotion](https://www.remotion.dev) kayıtları çerçeveleyip GIF'e çevirir (bkz. `media/README.md`).
 

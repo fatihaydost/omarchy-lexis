@@ -19,6 +19,7 @@ Item {
   property bool aiReading: false
   property int previewSeq: 0
   property string importFeedback: ""
+  property bool pathEntryOpen: false
 
   property string inspectedListName: ""
   property string inspectedListSource: ""
@@ -68,6 +69,11 @@ Item {
   function startImportPicker() {
     if (!service) return
     importFeedback = ""
+    if (service.zenityAvailable === false) {
+      pathEntryOpen = true
+      pathInput.forceActiveFocus()
+      return
+    }
     service.openImportDialog(function(chosenPath) {
       root.loadPreview(chosenPath, [0, 1, 2, 3], true)
     })
@@ -273,6 +279,66 @@ Item {
       }
     }
 
+    // zenity yokken dosya seçici yerine yol yapıştırma
+    Column {
+      visible: root.pathEntryOpen
+      width: parent.width
+      spacing: 6
+
+      Text {
+        width: parent.width
+        wrapMode: Text.WordWrap
+        text: Theme.t(root.lang,
+          "Dosya seçici için zenity paketi kurulu değil. Dosyanın yolunu yapıştırıp Enter'a bas (Esc kapatır).",
+          "The zenity package is not installed for the file picker. Paste the file path and press Enter (Esc closes).")
+        font.family: root.fontFamily
+        font.pixelSize: 12
+        color: root.tokens.muted || "#a89984"
+      }
+
+      Rectangle {
+        width: parent.width
+        height: 32
+        radius: 7
+        color: root.tokens.surface || "#32302f"
+        border.width: 1
+        border.color: pathInput.activeFocus
+          ? (root.tokens.accent || "#fe8019")
+          : (root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.16))
+
+        TextInput {
+          id: pathInput
+          anchors.fill: parent
+          anchors.leftMargin: 10
+          anchors.rightMargin: 10
+          verticalAlignment: TextInput.AlignVCenter
+          clip: true
+          font.family: root.fontFamily
+          font.pixelSize: 13
+          color: root.tokens.ink || "#ebdbb2"
+          Keys.onReturnPressed: {
+            var p = text.trim().replace(/^file:\/\//, "").replace(/^['"]|['"]$/g, "")
+            if (!p) return
+            root.pathEntryOpen = false
+            text = ""
+            root.loadPreview(p, [0, 1, 2, 3], true)
+          }
+          Keys.onEscapePressed: {
+            root.pathEntryOpen = false
+            text = ""
+          }
+
+          Text {
+            visible: !parent.text
+            anchors.verticalCenter: parent.verticalCenter
+            text: "~/Downloads/words.pdf"
+            font: parent.font
+            color: root.tokens.faint || "#665c54"
+          }
+        }
+      }
+    }
+
     Text {
       visible: root.importFeedback.length > 0
       text: root.importFeedback
@@ -307,8 +373,8 @@ Item {
         wrapMode: Text.WordWrap
         text: Theme.t(
           root.lang,
-          "30 kelimelik başlangıç destesiyle hemen deneyebilir veya kendi CSV/PDF kelime listeni içeri aktarabilirsin.",
-          "Try the built-in 30-word academic starter deck or import any CSV, TSV, or numbered PDF vocabulary sheet."
+          "30 kelimelik başlangıç destesiyle hemen deneyebilir veya kendi kelime listeni (CSV, PDF, DOCX, TXT…) içeri aktarabilirsin.",
+          "Try the built-in 30-word academic starter deck or import your own word list (CSV, PDF, DOCX, TXT…)."
         )
         font.family: root.fontFamily
         font.pixelSize: 13
@@ -321,7 +387,8 @@ Item {
       id: deckListView
       visible: root.lists.length > 0
       width: parent.width
-      height: Math.max(80, parent.height - listHeaderBar.height - (root.importFeedback.length > 0 ? 72 : 42))
+      height: Math.max(80, parent.height - listHeaderBar.height - (root.importFeedback.length > 0 ? 72 : 42)
+        - (root.pathEntryOpen ? 72 : 0))
       clip: true
       spacing: 6
       model: root.lists

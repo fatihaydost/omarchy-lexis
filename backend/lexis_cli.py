@@ -2588,6 +2588,9 @@ def handle_command(cmd: str, payload: dict) -> dict:
                     updates["translation"] = translation
                 if fresh.meaning.strip():
                     updates["enriched"] = 1
+            # Sözlük ve AI anlam bulamadıysa arama bitti sayılır: arayüz "aranıyor" yerine "bulunamadı" gösterir.
+            if not fresh.enriched and not fresh.meaning.strip() and not meaning:
+                updates["enriched"] = 1
 
             if updates:
                 store.update_word(wid, **updates)

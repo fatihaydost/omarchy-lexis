@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Fatih Aydost",
   "license": "MIT",
-  "description": "Ambient vocabulary habit plugin for Omarchy with non-intrusive corner question cards, spaced repetition, multilingual CSV/PDF word decks, hybrid Free Dictionary lookup, and optional CLI or local AI support.",
+  "description": "Ambient vocabulary habit plugin for Omarchy with non-intrusive corner question cards, spaced repetition, word list import from CSV, PDF, DOCX, ODT and TXT, hybrid Free Dictionary lookup, and optional CLI or local AI support.",
   "homepage": "https://github.com/fatihaydost/omarchy-lexis",
   "kinds": [
     "service",
@@ -17,7 +17,7 @@
   },
   "barWidget": {
     "displayName": "Lexis",
-    "description": "Ambient vocabulary flashcards, quick word capture, and daily goal progress.",
+    "description": "Ambient vocabulary flashcards, quick word capture, and today's progress in the popout.",
     "category": "Productivity",
     "allowMultiple": false,
     "defaultSection": "right"

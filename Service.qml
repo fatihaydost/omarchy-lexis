@@ -649,6 +649,17 @@ Item {
     }
   }
 
+  // zenity Omarchy tabanında yok (çoğu sistemde başka bir paketin bağımlılığı olarak gelir):
+  // yoksa içe aktarma yol yapıştırmaya, dışa aktarma ev dizinindeki sabit dosyaya düşer.
+  property bool zenityAvailable: true
+
+  Process {
+    id: zenityCheckProc
+    running: true
+    command: ["sh", "-c", "command -v zenity"]
+    onExited: function(code) { svcRoot.zenityAvailable = code === 0 }
+  }
+
   function openImportDialog(cb) {
     if (importPickerProc.running) return
     _importDialogCb = cb || null
@@ -698,6 +709,14 @@ Item {
   }
 
   function exportCsvDialog() {
+    if (!zenityAvailable) {
+      enqueueRpc("export-csv", { path: "~/lexis-words.csv" }, function(res) {
+        if (res && res.ok) {
+          svcRoot.statusNotice = Theme.t(svcRoot.lang, "Dışa aktarıldı: ", "Exported: ") + res.count + " → " + res.path
+        }
+      })
+      return
+    }
     if (exportPickerProc.running) return
     nativeDialogOpen = true
     exportPickerProc.running = true

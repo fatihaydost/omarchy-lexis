@@ -445,7 +445,9 @@ Item {
                 elide: Text.ElideRight
                 text: modelData.meaning
                   ? String(modelData.meaning)
-                  : Theme.t(root.lang, "anlam aranıyor…", "enriching…")
+                  : (modelData.enriched
+                    ? Theme.t(root.lang, "anlam bulunamadı · Düzenle ile ekle", "no meaning found · add it with Edit")
+                    : Theme.t(root.lang, "anlam aranıyor…", "enriching…"))
                 font.family: root.fontFamily
                 font.pixelSize: 11
                 font.italic: !modelData.meaning

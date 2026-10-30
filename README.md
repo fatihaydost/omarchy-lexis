@@ -113,7 +113,8 @@ o.bind("SUPER + ALT + ESCAPE", "Skip active Lexis card", "omarchy-shell lexis di
 - **Database:** `~/.local/share/lexis/lexis.sqlite`
 - **Preferences:** `~/.config/lexis/settings.json`
 - **Optional `/v1` API key (`0600`):** `~/.local/state/lexis/api_key`
-- **Runtime tools (standard on Omarchy 4.x):** `python3` (stdlib only — zero `pip` packages), `wl-paste` (`wl-clipboard`, for selection capture), `zenity` (for native file open/save dialogs), and `pdftotext` (`poppler`, optional, for PDF table imports).
+- **Runtime tools:** `python3` (stdlib only — zero `pip` packages), `wl-paste` (`wl-clipboard`, for selection capture) and `pdftotext` (`poppler`, for PDF imports) ship with Omarchy 4.x.
+- **Optional `zenity`:** not part of the Omarchy base install. With it, `Import file…` and `Export CSV` open native file dialogs; without it you paste the file path into the Lists page and exports go to `~/lexis-words.csv`.
 
 - **README media:** the GIFs and screenshots come from the plugin itself running on sample data. `zsh media/record/make_media.sh` records them on an empty workspace without touching your own data, and [Remotion](https://www.remotion.dev) in `media/` frames the recordings and turns them into GIFs (see `media/README.md`).
 
