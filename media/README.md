@@ -9,7 +9,7 @@ Turns real screen recordings of the plugin into the GIFs and screenshots used in
    records each scenario into `public/clips/<name>.mp4`, takes the main-window screenshots,
    restarts the shell on your own data and renders the GIFs. Pass scenario names to run only some:
    `zsh record/make_media.sh flow capture stills`. Needs `wf-recorder`, `ydotool` with `ydotoold`
-   running, ImageMagick, `ffmpeg` and `node`; coordinates assume the screen described in `record/lib.sh`.
+   running, `grim`, `ffmpeg` and `node`; coordinates assume the screen described in `record/lib.sh`.
 3. Edit `scenes.json`: one entry per GIF (`flow`, `capture`).
    `trim` picks the clip range; `camera` keyframes are crop rectangles in source pixels,
    timed in seconds from the trim start, eased in-out between them. Keep each rect's w/h

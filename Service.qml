@@ -506,6 +506,10 @@ Item {
 
   function updateWord(payload, cb) {
     enqueueRpc("update-word", _queryStatePayload(payload || ({})), function(res) {
+      // Form "anlamı boş bırakırsan sözlük doldurur" der: boş anlamla kaydedilen kelime yeniden aranır.
+      if (res && res.ok && payload && payload.wordId && "meaning" in payload && !String(payload.meaning || "").trim()) {
+        svcRoot.enqueueBgRpc("enrich-word", svcRoot._queryStatePayload({ wordId: payload.wordId }), null)
+      }
       if (cb) cb(res)
     })
   }
@@ -713,6 +717,9 @@ Item {
       enqueueRpc("export-csv", { path: "~/lexis-words.csv" }, function(res) {
         if (res && res.ok) {
           svcRoot.statusNotice = Theme.t(svcRoot.lang, "Dışa aktarıldı: ", "Exported: ") + res.count + " → " + res.path
+        } else {
+          svcRoot.statusNotice = Theme.t(svcRoot.lang, "Dışa aktarılamadı: ", "Export failed: ")
+            + String((res && res.error) || "~/lexis-words.csv")
         }
       })
       return

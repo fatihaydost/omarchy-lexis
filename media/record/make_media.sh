@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Regenerates the README screenshots and GIFs from the real plugin running in omarchy-shell.
 # Run with: zsh media/record/make_media.sh [flow capture stills]
-# Needs wf-recorder, ydotool with ydotoold running, tesseract, imagemagick, ffmpeg, node.
+# Needs wf-recorder, ydotool with ydotoold running, grim, ffmpeg, node.
 # It takes over the screen for ~2 minutes on an empty workspace (9) with sample data in ~/.cache/lexis-demo,
 # then restarts omarchy-shell on your own data. Coordinates assume a 1920x1080 panel at scale 1.25.
 set -eu
@@ -24,8 +24,19 @@ if ! hyprctl clients -j | grep -q lexis-demo_doc; then
   sleep 4
 fi
 
+# Back to your own data, notifications and workspace; also runs when a scenario fails halfway
+restore() {
+  [ -n "${RP:-}" ] && kill -INT $RP 2>/dev/null || true
+  for a in $(hyprctl clients -j | python3 -c 'import json,sys;[print(c["address"]) for c in json.load(sys.stdin) if "lexis-demo" in c["class"]]'); do
+    hyprctl dispatch "hl.dsp.window.close({window=\"address:$a\"})" >/dev/null
+  done
+  omarchy-restart-shell >/dev/null 2>&1 || true
+  wait_shell && dnd_off
+}
+trap restore EXIT INT TERM
+
 rec_start() { wf-recorder -y -o $MON -r 30 -f $CLIPS/$1.mp4 >/dev/null 2>&1 & RP=$!; sleep 1.2; }
-rec_stop() { sleep 0.5; kill -INT $RP; wait $RP 2>/dev/null || true; }
+rec_stop() { sleep 0.5; kill -INT $RP; wait $RP 2>/dev/null || true; RP=; }
 # The main window is centred; crop rectangles are physical pixels
 shot() { grim -o $MON - | ffmpeg -v error -y -i - -vf "crop=$2" $REPO/assets/$1.png; }
 # Make a word due now without touching the screen, so the next question is a 4-choice one
@@ -65,15 +76,9 @@ sc_stills() {
   omarchy-shell lexis close >/dev/null
 }
 
-dnd_on
 for s in ${@:-flow capture stills}; do sc_$s; done
-
-# Back to your own data, notifications and workspace
-for a in $(hyprctl clients -j | python3 -c 'import json,sys;[print(c["address"]) for c in json.load(sys.stdin) if "lexis-demo" in c["class"]]'); do
-  hyprctl dispatch "hl.dsp.window.close({window=\"address:$a\"})" >/dev/null
-done
-omarchy-restart-shell >/dev/null 2>&1
-sleep 4; [ "$(omarchy-shell notifications toggleDnd 2>/dev/null)" = "off" ] || omarchy-shell notifications toggleDnd >/dev/null
+trap - EXIT INT TERM
+restore
 
 GIFS=(${${@:-flow capture}:#stills})
 [ ${#GIFS} -gt 0 ] && cd $REPO/media && node render.mjs $GIFS

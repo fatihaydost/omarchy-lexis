@@ -864,6 +864,7 @@ Item {
             text: {
               if (!root.detail) return ""
               if (root.detail.meaning) return String(root.detail.meaning)
+              if (root.detail.enriched) return Theme.t(root.lang, "Anlam bulunamadı · Düzenle ile ekleyebilirsin", "No meaning found · add one with Edit")
               return Theme.t(root.lang, "Anlam sözlükten aranıyor…", "Looking up meaning in dictionary…")
             }
             font.family: root.fontFamily

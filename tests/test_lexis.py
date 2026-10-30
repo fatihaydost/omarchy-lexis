@@ -1057,6 +1057,7 @@ Item {{
         wordsPage.formMode = ""
         listsPage.previewData = null
         listsPage.inspectedListName = ""
+        listsPage.pathEntryOpen = true  // zenity yokken açılan yol kutusu da taşmamalı
         mockSvc.settings = {{
           language: cb.lang,
           toastScreen: "",

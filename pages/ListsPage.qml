@@ -25,15 +25,27 @@ Item {
   property string inspectedListSource: ""
   property var inspectedWords: []
 
-  readonly property bool isEditingText: importNameInput.activeFocus
+  readonly property bool isEditingText: importNameInput.activeFocus || pathInput.activeFocus
 
   function releaseTextFocus() {
+    if (pathInput.activeFocus) {
+      // Yol kutusunda Esc kutuyu kapatır, pencereyi değil
+      pathInput.text = ""
+      pathInput.focus = false
+      pathEntryOpen = false
+      return true
+    }
     if (!importNameInput.activeFocus) return false
     importNameInput.focus = false
     return true
   }
 
   function dismissOverlay() {
+    if (pathEntryOpen) {
+      pathInput.text = ""
+      pathEntryOpen = false
+      return true
+    }
     if (previewData !== null) {
       previewData = null
       previewPath = ""

@@ -11,14 +11,17 @@ glide() { # x0 y0 x1 y1 steps
   local i; for i in $(seq 1 $5); do mv_ $(( $1 + ($3 - $1) * i / $5 )) $(( $2 + ($4 - $2) * i / $5 )); sleep 0.016; done; }
 click() { mv_ $1 $2; sleep 0.05; ydotool click 0xC0 >/dev/null; }
 dclick() { mv_ $1 $2; sleep 0.05; ydotool click 0xC0 >/dev/null; sleep 0.08; ydotool click 0xC0 >/dev/null; }
+# toggleDnd returns the new state; call these only once the shell answers ping (wait_shell)
 dnd_on() { [ "$(omarchy-shell notifications toggleDnd 2>/dev/null)" = "on" ] || omarchy-shell notifications toggleDnd >/dev/null; }
+dnd_off() { [ "$(omarchy-shell notifications toggleDnd 2>/dev/null)" = "off" ] || omarchy-shell notifications toggleDnd >/dev/null; }
+wait_shell() { for i in $(seq 1 80); do omarchy-shell shell ping >/dev/null 2>&1 && return 0; sleep 0.5; done; return 1; }
 
 # Restart omarchy-shell with Lexis pointed at the demo data (your real data is never touched)
 relaunch_demo() {
   local cfg=/usr/share/omarchy/shell
   while timeout 30 quickshell kill -p "$cfg" --any-display >/dev/null 2>&1; do :; done; sleep 1
   hyprctl dispatch "hl.dsp.exec_cmd(\"env $(tr '\n' ' ' < $DEMO/env) omarchy-launch-shell\")" >/dev/null
-  for i in $(seq 1 80); do omarchy-shell shell ping >/dev/null 2>&1 && break; sleep 0.5; done; sleep 2
+  wait_shell; sleep 2
 }
 
 # Reseed the demo database and settings so every scenario starts from the same screen
@@ -26,5 +29,6 @@ fresh() {
   ( set -a; . $DEMO/env; set +a; rm -rf $DEMO/data/*(N) $DEMO/config/*(N) $DEMO/state/*(N)
     python3 -I $REPO/media/record/seed_demo.py $REPO >/dev/null )
   relaunch_demo
+  dnd_on   # a fresh shell starts with notifications on
   hyprctl dispatch 'hl.dsp.focus({workspace=9})' >/dev/null
 }
