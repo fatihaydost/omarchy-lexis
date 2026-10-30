@@ -1,125 +1,125 @@
 # Lexis (`l.`)
 
-> Ambient vocabulary habit plugin for **Omarchy 4.x** (`omarchy-shell` / Quickshell + Hyprland).
-> Türkçe dokümantasyon: [`README.tr.md`](./README.tr.md)
+> **Omarchy 4.x** (`omarchy-shell` / Quickshell + Hyprland) için odak çalmayan, sağ üst bildirim kartlarıyla çalışan kelime alışkanlığı eklentisi.
+> English documentation: [`README.en.md`](./README.en.md)
 
 <p align="center">
-  <img src="assets/flow.gif" width="880" alt="A new-word card, then a multiple-choice question answered in the top-right corner while a document stays in focus">
+  <img src="assets/flow.gif" width="880" alt="Bir belge odakta kalırken sağ üst köşede yeni kelime kartı ve ardından cevaplanan şıklı soru">
 </p>
 
-Lexis builds a quiet, everyday vocabulary habit while you work. Every few minutes (default **5 min**), a small notification-like question card appears in the top-right corner **without stealing keyboard focus** from your terminal, editor, or browser — and stays patiently until you answer, skip (`✕`), or hide (`Don't show again`) the word.
+Lexis, bilgisayar başında çalışırken araya girmeyen bir kelime öğrenme alışkanlığı kurar. Belirlediğin aralıklarla (varsayılan **5 dk**) sağ üst köşede bildirim benzeri küçük bir soru kartı belirir; terminalinden veya editöründen **klavye odağını çalmaz** ve sen cevaplayana, `✕` ile atlayana ya da `Bir daha gösterme` ile gizleyene kadar kendiliğinden kaybolmaz.
 
 ---
 
-## Highlights
+## Öne Çıkan Özellikler
 
-- **Zero-focus-steal corner question cards:** Built on `WlrLayer.Overlay` with `WlrKeyboardFocus.None` by default and a tight input region (`mask: Region`) so clicks outside the card pass straight through to your desktop. Automatically pauses while Omarchy is locked or in Do Not Disturb.
-- **4-stage spaced repetition (SRS):**
-  1. **Introduction card (`New word`)** — shows a new word, its meaning, an example sentence, and translation before ever quizzing you (`Got it`).
-  2. **4-Choice flashcards** (`Word → Meaning` & `Meaning → Word`) with part-of-speech-matched distractors.
-  3. **Mixed review** across all 4 question types as the word settles.
-  4. **Typed recall** (`Word → Typed meaning` & `In context → Typed`) once a word reaches higher SRS boxes, with keyboard focus granted on demand only when you click the input box or trigger `focusToast`.
-- **Any learning language pair:** Interface defaults to **English** (with **Türkçe** selectable in Settings), while your `Target language` and `Meaning language` are completely up to you (`English → Turkish`, `German → English`, `Japanese → English`, `Spanish → Turkish`, etc.).
-- **One-shortcut word capture (`SUPER + SHIFT + X`):** Select any word or short phrase in a browser, PDF, or terminal and capture it straight into your `Custom` deck via `wl-paste`.
-- **Hybrid Free Dictionary + Optional AI (`Off` works out of the box):**
-  - **Primary Free Dictionary (zero login, zero quota):** Enriches captured words and powers the `Translate` tab via Wiktionary (`freedictionaryapi.com`), Tatoeba example pairs, and MyMemory.
-  - **Optional CLI AI boost/judge:** Connect your existing **Gemini (`agy`)**, **Claude Code (`claude`)**, or **ChatGPT (`codex`)** subscription on its lowest-quota model (`gemini-3.8-flash-low`, `claude-haiku-5-5`, `gpt-5.6-luna`) for idioms missing from dictionaries and synonym grading on typed answers.
-  - **Optional Local / Custom `/v1` endpoint:** 1-click presets for **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`), and **OpenRouter**, with live `/v1/models` discovery.
-- **Word list import from CSV, TSV, PDF, DOCX, ODT, TXT & MD:** Recognizes common list shapes (`word - meaning`, `word = meaning`, `word (adj): meaning`, numbered/bulleted lines, tables, multi-line PDF tables via `pdftotext -layout`) and shows a full preview with skipped lines and duplicates before importing; unrecognized lines can optionally be read with your AI provider. Also includes a built-in 30-word academic starter deck, interactive 4-column CSV mapper, CSV backup export, and 1-click migration from legacy `kelime.db`.
-- **Live Omarchy theme sync:** Adapts automatically to your active Omarchy theme (`Commons.Color`).
+- **Odak çalmayan sağ üst soru kartı:** `WlrLayer.Overlay` ve varsayılan `WlrKeyboardFocus.None` ile çalışır; `mask: Region` sayesinde kartın dışındaki tüm tıklamalar doğrudan alttaki pencerelere geçer. Ekran kilitliyken ve Rahatsız Etme (DND) açıkken otomatik duraklar.
+- **4 aşamalı aralıklı tekrar (SRS):**
+  1. **Tanışma kartı (`Yeni kelime`)** — hiç görmediğin kelimeyi sormadan önce anlamı, örnek cümlesi ve cümle çevirisiyle tanıştırır (`Anladım`).
+  2. **4 şıklı kartlar** (`Kelime → Anlam` ve `Anlam → Kelime`), aynı sözcük türünden seçilen çeldiricilerle.
+  3. **Karma tekrar** — kelime oturdukça 4 soru tipini harmanlar.
+  4. **Yazılı hatırlama** (`Kelime → Yazılı anlam` ve `Cümle içinde → Yazılı`) — yalnızca kutuya tıkladığında veya `focusToast` çağırdığında geçici klavye odağı alır.
+- **İstediğin dil çifti:** Arayüz varsayılan **English** gelir, Ayarlar'dan tek tıkla **Türkçe** seçilir. Öğrendiğin dil (`Target language`) ve anlam dili (`Meaning language`) tamamen senin tercihine açıktır (`English → Turkish`, `German → Turkish`, `Japanese → English` vb.).
+- **Seçili metinden tek kısayolla yakalama (`SUPER + SHIFT + X`):** Tarayıcıda, PDF'te veya terminalde seçtiğin kelimeyi `wl-paste` ile doğrudan `Custom` destene ekler.
+- **Hibrit Ücretsiz Sözlük + İsteğe Bağlı AI (`Kapalı` modda kutudan çıktığı gibi çalışır):**
+  - **Birincil Ücretsiz Sözlük (girişsiz, kotasız):** Wiktionary (`freedictionaryapi.com`), Tatoeba örnek cümleleri ve MyMemory üzerinden anlam, örnek cümle ve çeviriyi otomatik doldurur.
+  - **İsteğe bağlı CLI AI aboneliği:** Kendi **Gemini (`agy`)**, **Claude Code (`claude`)** veya **ChatGPT (`codex`)** aboneliğini en düşük kotalı modelle (`gemini-3.8-flash-low`, `claude-haiku-5-5`, `gpt-5.6-luna`) bağlayarak deyim tamamlama ve yazılı cevaplarda eş anlamlı/yazım hatası esnekliği açabilirsin.
+  - **Yerel / Özel `/v1` uç noktası:** **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`) ve **OpenRouter** için tek tık ön ayarlar ve canlı `/v1/models` model listeleme.
+- **CSV, TSV, PDF, DOCX, ODT, TXT ve MD kelime listesi içe aktarma:** Yaygın liste biçimlerini tanır (`kelime - anlam`, `kelime = anlam`, `kelime (adj): anlam`, numaralı/madde işaretli satırlar, tablolar, `pdftotext -layout` ile çok satırlı PDF tabloları); eklemeden önce atlanan satırları ve zaten kayıtlı kelimeleri gösteren tam önizleme sunar, tanınmayan satırlar isteğe bağlı olarak AI sağlayıcınla okunur. Ayrıca 30 kelimelik yerleşik akademik başlangıç destesi, 4 sütun CSV eşleyici, CSV yedek dışa aktarma ve eski `kelime.db` veritabanından tek tık taşıma.
+- **Canlı Omarchy teması:** Aktif Omarchy temasına (`Commons.Color`) canlı uyum sağlar.
 
-### Capture a word while you read
+### Okurken kelime yakala
 
-Select a word anywhere and press `SUPER + SHIFT + X`: Lexis adds it to your `Custom` deck and fills in its meaning and an example sentence from the free dictionary.
+Herhangi bir yerde bir kelimeyi seçip `SUPER + SHIFT + X` bas: Lexis onu `Custom` destene ekler, anlamını ve örnek cümlesini ücretsiz sözlükten doldurur.
 
 <p align="center">
-  <img src="assets/capture.gif" width="880" alt="Selecting a word in a document, capturing it with SUPER + SHIFT + X and seeing it in the Words page">
+  <img src="assets/capture.gif" width="880" alt="Belgede kelime seçip SUPER + SHIFT + X ile yakalama ve Kelimeler sayfasında görme">
 </p>
 
-### The main window
+### Ana pencere
 
 <p align="center">
-  <img src="assets/panel-today.png" width="49%" alt="Today page">
-  <img src="assets/panel-words.png" width="49%" alt="Words page">
+  <img src="assets/panel-today.png" width="49%" alt="Bugün sayfası">
+  <img src="assets/panel-words.png" width="49%" alt="Kelimeler sayfası">
 </p>
 <p align="center">
-  <img src="assets/panel-stats.png" width="49%" alt="Statistics page">
-  <img src="assets/panel-translate.png" width="49%" alt="Translate page">
+  <img src="assets/panel-stats.png" width="49%" alt="İstatistikler sayfası">
+  <img src="assets/panel-translate.png" width="49%" alt="Çeviri sayfası">
 </p>
 <p align="center">
-  <img src="assets/panel-lists.png" width="49%" alt="Lists page">
-  <img src="assets/panel-settings.png" width="49%" alt="Settings page">
+  <img src="assets/panel-lists.png" width="49%" alt="Listeler sayfası">
+  <img src="assets/panel-settings.png" width="49%" alt="Ayarlar sayfası">
 </p>
 
 ---
 
-## Adding to Omarchy
+## Omarchy'ye Ekleme
 
 ```bash
 omarchy plugin add https://github.com/fatihaydost/omarchy-lexis --enable
 ```
 
-Then add **Lexis** (`l.`) to your top bar from Omarchy Bar Settings (or click the `l.` indicator on the right side of the bar: **left-click** opens the quick popout, **right-click** opens the full desktop window, **middle-click** draws a question immediately).
+Ardından Omarchy bar ayarlarından **Lexis**'i (`l.`) üst bara ekle. Barın sağındaki `l.` göstergesinde **sol tık** hızlı açılır menüyü, **sağ tık** 6 sekmeli ana pencereyi açar, **orta tık** hemen yeni soru çeker.
 
-To remove the plugin cleanly:
+Eklentiyi kaldırmak için:
 
 ```bash
 omarchy plugin remove io.github.fatihaydost.lexis
 ```
 
-*(Your local vocabulary database in `~/.local/share/lexis/` is preserved unless you delete it yourself.)*
+*(`~/.local/share/lexis/` altındaki kelime veritabanın sen silmedikçe yerinde kalır.)*
 
 ---
 
-## Recommended Hyprland Keybindings
+## Önerilen Hyprland Kısayolları (`~/.config/hypr/bindings.lua`)
 
-Add these optional shortcuts to `~/.config/hypr/bindings.lua` (`hl.unbind` frees Omarchy's default `SUPER + SHIFT + X` X-webapp shortcut first):
+Omarchy varsayılan olarak `SUPER + SHIFT + X` kısayolunu X web uygulamasına bağladığı için önce `hl.unbind` ile boşa çıkarılır:
 
 ```lua
-o.bind("SUPER + ALT + L", "Lexis vocabulary panel", "omarchy-shell lexis panel")
+o.bind("SUPER + ALT + L", "Lexis kelime paneli", "omarchy-shell lexis panel")
 hl.unbind("SUPER + SHIFT + X")
-o.bind("SUPER + SHIFT + X", "Capture selected word to Lexis", "omarchy-shell lexis addSelection")
+o.bind("SUPER + SHIFT + X", "Seçili kelimeyi Lexis'e ekle", "omarchy-shell lexis addSelection")
 ```
 
-Optional keyboard-only toast shortcuts:
+Soru kartını yalnız klavyeyle kullanmak için isteğe bağlı kısayollar:
 
 ```lua
-o.bind("SUPER + ALT + RETURN", "Focus Lexis typed answer", "omarchy-shell lexis focusToast")
-o.bind("SUPER + ALT + ESCAPE", "Skip active Lexis card", "omarchy-shell lexis dismissToast")
+o.bind("SUPER + ALT + RETURN", "Lexis yazılı cevabına odaklan", "omarchy-shell lexis focusToast")
+o.bind("SUPER + ALT + ESCAPE", "Aktif Lexis kartını atla", "omarchy-shell lexis dismissToast")
 ```
 
 ---
 
-## `omarchy-shell lexis` IPC Commands
+## `omarchy-shell lexis` IPC Komutları
 
-| Command | Action |
+| Komut | İşlev |
 | :--- | :--- |
-| `omarchy-shell lexis panel` | Toggle the 6-tab main Lexis window on the focused monitor/workspace |
-| `omarchy-shell lexis tab <name>` | Open a specific tab (`today`, `words`, `translate`, `stats`, `lists`, `settings`) |
-| `omarchy-shell lexis toggle` | Toggle the bar quick-popout on the focused monitor |
-| `omarchy-shell lexis askNow` | Draw and show a vocabulary question card immediately |
-| `omarchy-shell lexis addSelection` | Capture the currently selected word/phrase (`wl-paste`) and enrich it |
-| `omarchy-shell lexis mute 60` | Pause scheduled questions for `N` minutes (`0` resumes immediately) |
-| `omarchy-shell lexis focusToast` | Focus the typed answer box when a written question card is visible |
-| `omarchy-shell lexis dismissToast` | Skip the active question card without penalty (or close feedback) |
-| `omarchy-shell lexis close` | Close the main Lexis window |
-| `omarchy-shell lexis reload` | Reload SQLite and settings snapshot from disk |
-| `omarchy-shell lexis status` | Print current daily progress, countdown, and active question state as JSON |
+| `omarchy-shell lexis panel` | Ana Lexis penceresini aç / kapat |
+| `omarchy-shell lexis tab <ad>` | Belirli bir sekmeyi aç (`today`, `words`, `translate`, `stats`, `lists`, `settings`) |
+| `omarchy-shell lexis toggle` | Üst bar hızlı menüsünü aç / kapat |
+| `omarchy-shell lexis askNow` | Sağ üstte hemen yeni bir soru kartı göster |
+| `omarchy-shell lexis addSelection` | Seçili kelime/ifadeyi yakala ve sözlükten tamamla |
+| `omarchy-shell lexis mute 60` | Soruları `N` dakika sustur (`0` hemen devam ettirir) |
+| `omarchy-shell lexis focusToast` | Yazılı soru kartındaki cevap kutusuna odaklan |
+| `omarchy-shell lexis dismissToast` | Aktif soru kartını cezasız atla |
+| `omarchy-shell lexis close` | Ana pencereyi kapat |
+| `omarchy-shell lexis reload` | Diskteki SQLite ve ayar anlık görüntüsünü yeniden yükle |
+| `omarchy-shell lexis status` | Günlük ilerleme ve aktif soru durumunu JSON olarak yazdır |
 
 ---
 
-## Local Data Paths & Dependencies
+## Yerel Veri Yolları
 
-- **Database:** `~/.local/share/lexis/lexis.sqlite`
-- **Preferences:** `~/.config/lexis/settings.json`
-- **Optional `/v1` API key (`0600`):** `~/.local/state/lexis/api_key`
-- **Runtime tools:** `python3` (stdlib only — zero `pip` packages), `wl-paste` (`wl-clipboard`, for selection capture) and `pdftotext` (`poppler`, for PDF imports) ship with Omarchy 4.x.
-- **Optional `zenity`:** not part of the Omarchy base install. With it, `Import file…` and `Export CSV` open native file dialogs; without it you paste the file path into the Lists page and exports go to `~/lexis-words.csv`.
+- **Veritabanı:** `~/.local/share/lexis/lexis.sqlite`
+- **Ayarlar:** `~/.config/lexis/settings.json`
+- **İsteğe bağlı `/v1` API anahtarı (`0600`):** `~/.local/state/lexis/api_key`
+- **Çalışma araçları:** `python3` (yalnız standart kütüphane, `pip` paketi yok), `wl-paste` (`wl-clipboard`, seçim yakalama) ve `pdftotext` (`poppler`, PDF içe aktarma) Omarchy 4.x ile gelir.
+- **İsteğe bağlı `zenity`:** Omarchy temel kurulumunda yok. Kuruluysa `Dosya aktar…` ve `CSV dışa aktar` dosya penceresi açar; değilse Listeler sayfasına dosya yolunu yapıştırırsın, dışa aktarma `~/lexis-words.csv` dosyasına yazılır.
 
-- **README media:** the GIFs and screenshots come from the plugin itself running on sample data. `zsh media/record/make_media.sh` records them on an empty workspace without touching your own data, and [Remotion](https://www.remotion.dev) in `media/` frames the recordings and turns them into GIFs (see `media/README.md`).
+- **README görselleri:** GIF'ler ve ekran görüntüleri eklentinin kendisinden, örnek veriyle alınır. `zsh media/record/make_media.sh` bunları boş bir çalışma alanında, senin verine dokunmadan kaydeder; `media/` içindeki [Remotion](https://www.remotion.dev) kayıtları çerçeveleyip GIF'e çevirir (bkz. `media/README.md`).
 
 ---
 
-## License
+## Lisans
 
-Released under the [MIT License](./LICENSE). See [`SECURITY.md`](./SECURITY.md) for privacy and security details.
+[MIT Lisansı](./LICENSE) ile yayınlanmıştır. Güvenlik ve gizlilik ayrıntıları için [`SECURITY.md`](./SECURITY.md) dosyasına bakabilirsin.

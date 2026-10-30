@@ -1,0 +1,125 @@
+# Lexis (`l.`)
+
+> Ambient vocabulary habit plugin for **Omarchy 4.x** (`omarchy-shell` / Quickshell + Hyprland).
+> Türkçe dokümantasyon: [`README.md`](./README.md)
+
+<p align="center">
+  <img src="assets/flow.gif" width="880" alt="A new-word card, then a multiple-choice question answered in the top-right corner while a document stays in focus">
+</p>
+
+Lexis builds a quiet, everyday vocabulary habit while you work. Every few minutes (default **5 min**), a small notification-like question card appears in the top-right corner **without stealing keyboard focus** from your terminal, editor, or browser — and stays patiently until you answer, skip (`✕`), or hide (`Don't show again`) the word.
+
+---
+
+## Highlights
+
+- **Zero-focus-steal corner question cards:** Built on `WlrLayer.Overlay` with `WlrKeyboardFocus.None` by default and a tight input region (`mask: Region`) so clicks outside the card pass straight through to your desktop. Automatically pauses while Omarchy is locked or in Do Not Disturb.
+- **4-stage spaced repetition (SRS):**
+  1. **Introduction card (`New word`)** — shows a new word, its meaning, an example sentence, and translation before ever quizzing you (`Got it`).
+  2. **4-Choice flashcards** (`Word → Meaning` & `Meaning → Word`) with part-of-speech-matched distractors.
+  3. **Mixed review** across all 4 question types as the word settles.
+  4. **Typed recall** (`Word → Typed meaning` & `In context → Typed`) once a word reaches higher SRS boxes, with keyboard focus granted on demand only when you click the input box or trigger `focusToast`.
+- **Any learning language pair:** Interface defaults to **English** (with **Türkçe** selectable in Settings), while your `Target language` and `Meaning language` are completely up to you (`English → Turkish`, `German → English`, `Japanese → English`, `Spanish → Turkish`, etc.).
+- **One-shortcut word capture (`SUPER + SHIFT + X`):** Select any word or short phrase in a browser, PDF, or terminal and capture it straight into your `Custom` deck via `wl-paste`.
+- **Hybrid Free Dictionary + Optional AI (`Off` works out of the box):**
+  - **Primary Free Dictionary (zero login, zero quota):** Enriches captured words and powers the `Translate` tab via Wiktionary (`freedictionaryapi.com`), Tatoeba example pairs, and MyMemory.
+  - **Optional CLI AI boost/judge:** Connect your existing **Gemini (`agy`)**, **Claude Code (`claude`)**, or **ChatGPT (`codex`)** subscription on its lowest-quota model (`gemini-3.8-flash-low`, `claude-haiku-5-5`, `gpt-5.6-luna`) for idioms missing from dictionaries and synonym grading on typed answers.
+  - **Optional Local / Custom `/v1` endpoint:** 1-click presets for **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`), and **OpenRouter**, with live `/v1/models` discovery.
+- **Word list import from CSV, TSV, PDF, DOCX, ODT, TXT & MD:** Recognizes common list shapes (`word - meaning`, `word = meaning`, `word (adj): meaning`, numbered/bulleted lines, tables, multi-line PDF tables via `pdftotext -layout`) and shows a full preview with skipped lines and duplicates before importing; unrecognized lines can optionally be read with your AI provider. Also includes a built-in 30-word academic starter deck, interactive 4-column CSV mapper, CSV backup export, and 1-click migration from legacy `kelime.db`.
+- **Live Omarchy theme sync:** Adapts automatically to your active Omarchy theme (`Commons.Color`).
+
+### Capture a word while you read
+
+Select a word anywhere and press `SUPER + SHIFT + X`: Lexis adds it to your `Custom` deck and fills in its meaning and an example sentence from the free dictionary.
+
+<p align="center">
+  <img src="assets/capture.gif" width="880" alt="Selecting a word in a document, capturing it with SUPER + SHIFT + X and seeing it in the Words page">
+</p>
+
+### The main window
+
+<p align="center">
+  <img src="assets/panel-today.png" width="49%" alt="Today page">
+  <img src="assets/panel-words.png" width="49%" alt="Words page">
+</p>
+<p align="center">
+  <img src="assets/panel-stats.png" width="49%" alt="Statistics page">
+  <img src="assets/panel-translate.png" width="49%" alt="Translate page">
+</p>
+<p align="center">
+  <img src="assets/panel-lists.png" width="49%" alt="Lists page">
+  <img src="assets/panel-settings.png" width="49%" alt="Settings page">
+</p>
+
+---
+
+## Adding to Omarchy
+
+```bash
+omarchy plugin add https://github.com/fatihaydost/omarchy-lexis --enable
+```
+
+Then add **Lexis** (`l.`) to your top bar from Omarchy Bar Settings (or click the `l.` indicator on the right side of the bar: **left-click** opens the quick popout, **right-click** opens the full desktop window, **middle-click** draws a question immediately).
+
+To remove the plugin cleanly:
+
+```bash
+omarchy plugin remove io.github.fatihaydost.lexis
+```
+
+*(Your local vocabulary database in `~/.local/share/lexis/` is preserved unless you delete it yourself.)*
+
+---
+
+## Recommended Hyprland Keybindings
+
+Add these optional shortcuts to `~/.config/hypr/bindings.lua` (`hl.unbind` frees Omarchy's default `SUPER + SHIFT + X` X-webapp shortcut first):
+
+```lua
+o.bind("SUPER + ALT + L", "Lexis vocabulary panel", "omarchy-shell lexis panel")
+hl.unbind("SUPER + SHIFT + X")
+o.bind("SUPER + SHIFT + X", "Capture selected word to Lexis", "omarchy-shell lexis addSelection")
+```
+
+Optional keyboard-only toast shortcuts:
+
+```lua
+o.bind("SUPER + ALT + RETURN", "Focus Lexis typed answer", "omarchy-shell lexis focusToast")
+o.bind("SUPER + ALT + ESCAPE", "Skip active Lexis card", "omarchy-shell lexis dismissToast")
+```
+
+---
+
+## `omarchy-shell lexis` IPC Commands
+
+| Command | Action |
+| :--- | :--- |
+| `omarchy-shell lexis panel` | Toggle the 6-tab main Lexis window on the focused monitor/workspace |
+| `omarchy-shell lexis tab <name>` | Open a specific tab (`today`, `words`, `translate`, `stats`, `lists`, `settings`) |
+| `omarchy-shell lexis toggle` | Toggle the bar quick-popout on the focused monitor |
+| `omarchy-shell lexis askNow` | Draw and show a vocabulary question card immediately |
+| `omarchy-shell lexis addSelection` | Capture the currently selected word/phrase (`wl-paste`) and enrich it |
+| `omarchy-shell lexis mute 60` | Pause scheduled questions for `N` minutes (`0` resumes immediately) |
+| `omarchy-shell lexis focusToast` | Focus the typed answer box when a written question card is visible |
+| `omarchy-shell lexis dismissToast` | Skip the active question card without penalty (or close feedback) |
+| `omarchy-shell lexis close` | Close the main Lexis window |
+| `omarchy-shell lexis reload` | Reload SQLite and settings snapshot from disk |
+| `omarchy-shell lexis status` | Print current daily progress, countdown, and active question state as JSON |
+
+---
+
+## Local Data Paths & Dependencies
+
+- **Database:** `~/.local/share/lexis/lexis.sqlite`
+- **Preferences:** `~/.config/lexis/settings.json`
+- **Optional `/v1` API key (`0600`):** `~/.local/state/lexis/api_key`
+- **Runtime tools:** `python3` (stdlib only — zero `pip` packages), `wl-paste` (`wl-clipboard`, for selection capture) and `pdftotext` (`poppler`, for PDF imports) ship with Omarchy 4.x.
+- **Optional `zenity`:** not part of the Omarchy base install. With it, `Import file…` and `Export CSV` open native file dialogs; without it you paste the file path into the Lists page and exports go to `~/lexis-words.csv`.
+
+- **README media:** the GIFs and screenshots come from the plugin itself running on sample data. `zsh media/record/make_media.sh` records them on an empty workspace without touching your own data, and [Remotion](https://www.remotion.dev) in `media/` frames the recordings and turns them into GIFs (see `media/README.md`).
+
+---
+
+## License
+
+Released under the [MIT License](./LICENSE). See [`SECURITY.md`](./SECURITY.md) for privacy and security details.

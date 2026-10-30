@@ -670,7 +670,7 @@ class LexisCoreTests(unittest.TestCase):
             "LICENSE",
             "SECURITY.md",
             "README.md",
-            "README.tr.md",
+            "README.en.md",
             "preview.png",
         ]
         for rel in required_files:
