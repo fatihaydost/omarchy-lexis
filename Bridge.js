@@ -52,3 +52,9 @@ function barWidgetForScreen(screenName) {
   }
   return _barWidgets.length > 0 ? _barWidgets[0] : null
 }
+
+function windowScreenName(winObj) {
+  if (!winObj) return ""
+  var scr = winObj.screen
+  return (scr && scr.name) ? String(scr.name) : ""
+}
