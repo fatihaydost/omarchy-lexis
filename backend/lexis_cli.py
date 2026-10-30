@@ -17,6 +17,8 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
 
 # Aralıklı tekrar sabitleri (eski kelime uygulamasıyla birebir aynı)
 INTERVALS = [600, 1800, 7200, 86400, 3 * 86400, 7 * 86400]
@@ -608,6 +610,7 @@ class ImportRow:
     meaning: str
     example: str = ""
     translation: str = ""
+    pos: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -615,6 +618,7 @@ class ImportRow:
             "meaning": self.meaning,
             "example": self.example,
             "translation": self.translation,
+            "pos": self.pos,
         }
 
 
@@ -771,11 +775,230 @@ def read_pdf_rows(path: Path | str) -> list[ImportRow]:
         return []
 
 
+TEXT_SUFFIXES = (".pdf", ".docx", ".odt", ".txt", ".md")
+_POS_ABBR = {
+    "n": "noun", "noun": "noun", "v": "verb", "verb": "verb", "pv": "verb", "phr": "verb",
+    "adj": "adjective", "a": "adjective", "adv": "adverb", "prep": "other", "conj": "other",
+    "pron": "other", "exp": "other", "phrase": "other", "idiom": "other",
+}
+_LIST_MARK_RE = re.compile(r"^\s*(?:\d{1,4}\s*[.)\-]\s*|\d{1,4}\s{2,}|[-•*·▪●–]\s+)")
+_POS_LINE_RE = re.compile(r"^(?P<w>[^()]+?)\s*\((?P<pos>[A-Za-z. ]{1,8})\)\s*[:=\-–—]?\s*(?P<m>.+)$")
+# Sıra önemli: çok sütunlu ayırıcılar önce, tek seferlik "kelime ayırıcı anlam" ayırıcıları sonra.
+_MULTI_SPLIT_RE = (re.compile(r"\t+"), re.compile(r"\s*\|\s*"), re.compile(r"\s{2,}"))
+_PAIR_SPLIT_RE = (
+    re.compile(r"\s*=\s*"), re.compile(r"\s*:\s+|\s*:(?=\S)"), re.compile(r"\s+[–—-]\s+"),
+    re.compile(r"\s*;\s*"),
+)
+
+
+def _office_lines(el, tag_of, row_tag: str, cell_tag: str, para_tags: tuple[str, ...], para_text) -> list[str]:
+    """Belge ağacını sırayla gezer: tablo satırı hücreleri sekmeyle birleşir, paragraf kendi satırı olur."""
+    out: list[str] = []
+    for child in el:
+        tag = tag_of(child)
+        if tag == row_tag:
+            cells = [
+                _clean_cell(" ".join(para_text(par) for par in c.iter() if tag_of(par) in para_tags))
+                for c in child if tag_of(c) == cell_tag
+            ]
+            out.append("\t".join(cells))
+        elif tag in para_tags:
+            out.append(para_text(child))
+        else:
+            out.extend(_office_lines(child, tag_of, row_tag, cell_tag, para_tags, para_text))
+    return out
+
+
+def _docx_text(path: Path) -> str:
+    """DOCX/ODT paragraflarını ve tablo satırlarını (hücreler sekmeyle) düz metne çevirir."""
+    tag_of = lambda e: e.tag.rsplit("}", 1)[-1]  # noqa: E731
+    with zipfile.ZipFile(path) as zf:
+        odt = path.suffix.lower() == ".odt"
+        root = ET.fromstring(zf.read("content.xml" if odt else "word/document.xml"))
+    if odt:
+        def odt_para(par) -> str:
+            parts = [par.text or ""]
+            for el in par:
+                t = tag_of(el)
+                parts.append("\t" if t == "tab" else "\n" if t == "line-break" else "".join(el.itertext()))
+                parts.append(el.tail or "")
+            return "".join(parts)
+        return "\n".join(_office_lines(root, tag_of, "table-row", "table-cell", ("p", "h"), odt_para))
+
+    def docx_para(par) -> str:
+        parts = []
+        for el in par.iter():
+            t = tag_of(el)
+            if t == "t":
+                parts.append(el.text or "")
+            elif t == "tab":
+                parts.append("\t")
+            elif t in ("br", "cr"):
+                parts.append("\n")
+        return "".join(parts)
+
+    return "\n".join(_office_lines(root, tag_of, "tr", "tc", ("p",), docx_para))
+
+
+def extract_text(path: Path | str) -> str:
+    p = Path(path)
+    suf = p.suffix.lower()
+    if suf == ".pdf":
+        try:
+            proc = subprocess.run(
+                [find_bin("pdftotext") or "pdftotext", "-layout", str(p), "-"],
+                capture_output=True, text=True, timeout=25, env=child_env(), check=False,
+            )
+            return proc.stdout if proc.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    if suf in (".docx", ".odt"):
+        try:
+            return _docx_text(p)
+        except (OSError, KeyError, zipfile.BadZipFile, ET.ParseError):
+            return ""
+    return p.read_text(encoding="utf-8-sig", errors="replace")
+
+
+def _valid_pair(word: str, meaning: str) -> bool:
+    has_alpha = lambda t: any(ch.isalpha() for ch in t)  # noqa: E731
+    return (
+        bool(word) and bool(meaning) and has_alpha(word) and has_alpha(meaning)
+        and len(word) <= 48 and len(word.split()) <= 5
+    )
+
+
+def parse_vocab_line(line: str) -> ImportRow | None:
+    """Tek satırı (kelime, anlam[, örnek, çeviri]) olarak çözer; tanınmazsa None."""
+    text = _LIST_MARK_RE.sub("", line.rstrip(), count=1).strip()
+    if not text:
+        return None
+    m = _POS_LINE_RE.match(text)
+    if m:
+        word, meaning = _clean_cell(m.group("w")), _clean_cell(m.group("m"))
+        pos = _POS_ABBR.get(m.group("pos").strip(" .").lower(), "")
+        return ImportRow(word, meaning, pos=pos) if _valid_pair(word, meaning) else None
+    for rx in _MULTI_SPLIT_RE:
+        cells = [_clean_cell(c) for c in rx.split(text) if _clean_cell(c)]
+        if len(cells) >= 2:
+            if _is_header_cells(cells):
+                return None
+            cells += [""] * (4 - len(cells))
+            if _valid_pair(cells[0], cells[1]):
+                return ImportRow(cells[0], cells[1], cells[2], " ".join(cells[3:]).strip())
+    for rx in _PAIR_SPLIT_RE:
+        parts = rx.split(text, maxsplit=1)
+        if len(parts) == 2:
+            word, meaning = _clean_cell(parts[0]), _clean_cell(parts[1])
+            if _is_header_cells([word, meaning]):
+                return None
+            if _valid_pair(word, meaning):
+                return ImportRow(word, meaning)
+    return None
+
+
+def parse_vocab_text(text: str) -> tuple[list[ImportRow], list[str]]:
+    """Serbest biçimli liste metnini satır satır çözer; (satırlar, tanınmayan satırlar) döner."""
+    rows: list[ImportRow] = []
+    unparsed: list[str] = []
+    for raw in (text or "").replace("\f", "\n").splitlines():
+        stripped = _clean_cell(raw)
+        if not stripped or _PAGE_FOOTER_RE.match(stripped) or not any(ch.isalpha() for ch in stripped):
+            continue
+        row = parse_vocab_line(raw)
+        if row:
+            rows.append(row)
+        elif not _is_header_cells(stripped.split()):
+            unparsed.append(stripped)
+    return rows, unparsed
+
+
+def dedupe_rows(rows: list[ImportRow]) -> list[ImportRow]:
+    seen: set[str] = set()
+    out = []
+    for r in rows:
+        key = tr_lower(r.word)
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+
+AI_IMPORT_MAX_LINES = 120
+AI_IMPORT_CHUNK = 30
+IMPORT_ROWS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "rows": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "word": {"type": "string"},
+                    "meaning": {"type": "string"},
+                    "example": {"type": "string"},
+                    "translation": {"type": "string"},
+                },
+                "required": ["word", "meaning", "example", "translation"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["rows"],
+}
+
+
+def ai_parse_lines(lines: list[str], settings: dict, runner=subprocess.run) -> list[ImportRow]:
+    """Kuralların tanımadığı satırları AI ile kelime/anlam çiftlerine çevirir (en çok AI_IMPORT_MAX_LINES)."""
+    out: list[ImportRow] = []
+    todo = lines[:AI_IMPORT_MAX_LINES]
+    for i in range(0, len(todo), AI_IMPORT_CHUNK):
+        chunk = todo[i : i + AI_IMPORT_CHUNK]
+        prompt = (
+            f"These lines come from a vocabulary list document ({settings['targetLang']} words, "
+            f"{settings['meaningLang']} meanings). Extract every vocabulary entry as word + meaning, "
+            "plus example sentence and its translation only if present in the text (else empty string). "
+            "Skip titles, headings and other non-vocabulary lines. Do not invent entries.\n\n"
+            + "\n".join(chunk)
+        )
+        res = call_ai_structured(prompt, IMPORT_ROWS_SCHEMA, settings, runner=runner, max_tokens=3000)
+        for item in (res or {}).get("rows") or []:
+            if not isinstance(item, dict):
+                continue
+            vals = [_clean_cell(item.get(k)) for k in ("word", "meaning", "example", "translation")]
+            if _valid_pair(vals[0], vals[1]):
+                out.append(ImportRow(*vals))
+    return out
+
+
+def read_text_import(path: Path | str) -> tuple[list[ImportRow], list[str]]:
+    p = Path(path)
+    text = extract_text(p)
+    rows, unparsed = parse_vocab_text(text)
+    if p.suffix.lower() == ".pdf":
+        # Numaralı tablo bulunduysa sütun konumuna bakan çözücü kazanır: hücre devam satırlarını birleştirir.
+        table_rows = parse_pdftotext_layout(text) or (read_pdf_rows(p) if not rows else [])
+        if table_rows:
+            return dedupe_rows(table_rows), []
+    return dedupe_rows(rows), unparsed
+
+
 def read_import_rows(path: Path | str, columns=DEFAULT_COLUMNS) -> list[ImportRow]:
     p = Path(path)
-    if p.suffix.lower() == ".pdf":
-        return read_pdf_rows(p)
+    if p.suffix.lower() in TEXT_SUFFIXES:
+        return read_text_import(p)[0]
     return read_csv_rows(p, columns=columns)
+
+
+def rows_from_payload(items) -> list[ImportRow]:
+    out = []
+    for item in (items or [])[:5000]:
+        if not isinstance(item, dict):
+            continue
+        vals = [_clean_cell(item.get(k)) for k in ("word", "meaning", "example", "translation")]
+        if _valid_pair(vals[0], vals[1]):
+            out.append(ImportRow(*vals, pos=_clean_cell(item.get("pos"))))
+    return out
 
 
 def default_list_name_for(path: Path) -> str:
@@ -791,11 +1014,13 @@ def import_file_into_store(
     path: Path | str,
     list_name: str | None = None,
     columns=DEFAULT_COLUMNS,
+    rows: list[ImportRow] | None = None,
 ) -> dict:
     p = Path(path)
     if not p.is_file():
         return {"ok": False, "error": f"File not found: {p}"}
-    rows = read_import_rows(p, columns=columns)
+    if rows is None:
+        rows = read_import_rows(p, columns=columns)
     name = (list_name or "").strip() or default_list_name_for(p)
     store.set_list_source(name, str(p.resolve()))
     added = 0
@@ -803,11 +1028,12 @@ def import_file_into_store(
         wid = store.add_word(
             r.word,
             meaning=r.meaning,
-            pos=guess_pos(r.meaning),
+            pos=normalize_pos(r.pos, r.meaning),
             example=r.example,
             translation=r.translation,
             list_name=name,
-            enriched=True,
+            # Örneksiz kelimede enriched=False: açılınca sözlük/AI yalnız boş örneği doldurur, anlamı ezmez.
+            enriched=bool(r.example),
         )
         if wid is not None:
             added += 1
@@ -1104,7 +1330,7 @@ def build_cli_command(provider: str, prompt: str, schema: dict, cwd: str) -> lis
     raise ValueError(f"Unsupported CLI provider: {provider}")
 
 
-def _call_custom_v1(prompt: str, schema: dict, settings: dict) -> dict | None:
+def _call_custom_v1(prompt: str, schema: dict, settings: dict, max_tokens: int = 350) -> dict | None:
     base_url = str(settings.get("customBaseUrl") or "").strip().rstrip("/")
     model = str(settings.get("customModel") or "").strip()
     if not base_url or not model:
@@ -1120,7 +1346,7 @@ def _call_custom_v1(prompt: str, schema: dict, settings: dict) -> dict | None:
     body = {
         "model": model,
         "temperature": 0.1,
-        "max_tokens": 350,
+        "max_tokens": max_tokens,
         "messages": [
             {"role": "system", "content": sys_msg},
             {"role": "user", "content": prompt},
@@ -1144,12 +1370,13 @@ def call_ai_structured(
     schema: dict,
     settings: dict,
     runner=subprocess.run,
+    max_tokens: int = 350,
 ) -> dict | None:
     provider = str(settings.get("aiProvider") or "off")
     if provider == "off":
         return None
     if provider == "custom":
-        return _call_custom_v1(prompt, schema, settings)
+        return _call_custom_v1(prompt, schema, settings, max_tokens=max_tokens)
     if provider not in CLI_PROVIDERS:
         return None
 
@@ -2158,18 +2385,40 @@ def handle_command(cmd: str, payload: dict) -> dict:
             p = Path(str(payload.get("path") or "").strip()).expanduser()
             if not p.is_file():
                 return {"ok": False, "error": f"File not found: {p}"}
-            kind = "pdf" if p.suffix.lower() == ".pdf" else "csv"
+            suf = p.suffix.lower()
+            if suf in TEXT_SUFFIXES:
+                rows, unparsed = read_text_import(p)
+                ai_added = 0
+                if unparsed and payload.get("useAi") and ai_can_run(settings):
+                    before = len(rows)
+                    rows = dedupe_rows(rows + ai_parse_lines(unparsed, settings))
+                    ai_added = len(rows) - before
+                    unparsed = unparsed[AI_IMPORT_MAX_LINES:]
+                existing = {tr_lower(w.word) for w in store.all_words_for_export()}
+                return {
+                    "ok": True,
+                    "path": str(p),
+                    "kind": suf.lstrip("."),
+                    "name": default_list_name_for(p),
+                    "total": len(rows),
+                    "rows": [r.to_dict() for r in rows],
+                    "raw": [],
+                    "unparsed": len(unparsed),
+                    "unparsedSample": unparsed[:5],
+                    "duplicates": sum(1 for r in rows if tr_lower(r.word) in existing),
+                    "aiAdded": ai_added,
+                    "aiAvailable": ai_can_run(settings),
+                }
             cols = _normalize_columns(payload.get("columns"))
             rows = read_import_rows(p, columns=cols)
-            raw = [] if kind == "pdf" else read_csv_raw(p, limit=10)
             return {
                 "ok": True,
                 "path": str(p),
-                "kind": kind,
+                "kind": "csv",
                 "name": default_list_name_for(p),
                 "total": len(rows),
                 "rows": [r.to_dict() for r in rows[:10]],
-                "raw": raw,
+                "raw": read_csv_raw(p, limit=10),
             }
 
         if cmd == "confirm-import":
@@ -2180,6 +2429,8 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 p,
                 list_name=str(payload.get("listName") or "").strip() or None,
                 columns=cols,
+                # Önizlemede (AI dahil) çözülen satırlar aynen eklenir; dosya ikinci kez çözülmez.
+                rows=rows_from_payload(payload["rows"]) if isinstance(payload.get("rows"), list) else None,
             )
             if not res.get("ok"):
                 return res

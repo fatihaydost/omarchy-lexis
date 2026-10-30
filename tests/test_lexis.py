@@ -267,6 +267,97 @@ class LexisCoreTests(unittest.TestCase):
         self.assertEqual(rows[2].word, "bolster")
         self.assertEqual(rows[2].example, "Fresh data will bolster our argument.")
 
+    def test_free_form_lists_docx_odt_and_ai_fallback_import(self) -> None:
+        import zipfile
+        from backend.lexis_cli import ai_parse_lines, parse_vocab_text, read_text_import
+
+        rows, unparsed = parse_vocab_text(
+            "A2 Kelime Listesi\n"
+            "1. apple - elma\n"
+            "2) book = kitap\n"
+            "• run: koşmak\n"
+            "constant (adj): sürekli, sabit\n"
+            "take off (pv) kalkmak\n"
+            "word\tmeaning\texample\ttranslation\n"
+            "borrow\tödünç almak\tCan I borrow it?\tÖdünç alabilir miyim?\n"
+            "house | ev\n"
+            "Sayfa 1\n"
+            "Bu satır bir açıklamadır ve kelime değildir çünkü uzun\n"
+        )
+        got = [(r.word, r.meaning, r.pos) for r in rows]
+        self.assertEqual(
+            got,
+            [
+                ("apple", "elma", ""),
+                ("book", "kitap", ""),
+                ("run", "koşmak", ""),
+                ("constant", "sürekli, sabit", "adjective"),
+                ("take off", "kalkmak", "verb"),
+                ("borrow", "ödünç almak", ""),
+                ("house", "ev", ""),
+            ],
+        )
+        self.assertEqual(rows[5].example, "Can I borrow it?")
+        self.assertEqual(unparsed, ["A2 Kelime Listesi", "Bu satır bir açıklamadır ve kelime değildir çünkü uzun"])
+
+        w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        docx = Path(self.tmp.name, "liste.docx")
+        with zipfile.ZipFile(docx, "w") as zf:
+            zf.writestr(
+                "word/document.xml",
+                f"<w:document {w}><w:body>"
+                "<w:p><w:r><w:t>Unit 1</w:t></w:r></w:p>"
+                "<w:p><w:r><w:t>dizzy (adj): başı dönen</w:t></w:r></w:p>"
+                "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Word</w:t></w:r></w:p></w:tc>"
+                "<w:tc><w:p><w:r><w:t>Meaning</w:t></w:r></w:p></w:tc></w:tr>"
+                "<w:tr><w:tc><w:p><w:r><w:t>lake</w:t></w:r></w:p></w:tc>"
+                "<w:tc><w:p><w:r><w:t>göl</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+                "</w:body></w:document>",
+            )
+        rows, unparsed = read_text_import(docx)
+        self.assertEqual([(r.word, r.meaning) for r in rows], [("dizzy", "başı dönen"), ("lake", "göl")])
+        self.assertEqual(unparsed, ["Unit 1"])
+
+        odt = Path(self.tmp.name, "liste.odt")
+        with zipfile.ZipFile(odt, "w") as zf:
+            zf.writestr(
+                "content.xml",
+                '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+                'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+                'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"><office:body><office:text>'
+                "<text:p>fridge = buzdolabı</text:p>"
+                "<table:table><table:table-row><table:table-cell><text:p>plate</text:p></table:table-cell>"
+                "<table:table-cell><text:p>tabak</text:p></table:table-cell></table:table-row></table:table>"
+                "</office:text></office:body></office:document-content>",
+            )
+        rows, _ = read_text_import(odt)
+        self.assertEqual([(r.word, r.meaning) for r in rows], [("fridge", "buzdolabı"), ("plate", "tabak")])
+
+        # Önizleme tüm satırları döner; onay önizlemedeki satırları (AI dahil) aynen ekler.
+        prev = self.rpc("preview-import", {"path": str(docx)})
+        self.assertEqual((prev["kind"], prev["total"], prev["unparsed"], prev["duplicates"]), ("docx", 2, 1, 0))
+        extra = prev["rows"] + [{"word": "genius", "meaning": "deha"}]
+        res = self.rpc("confirm-import", {"path": str(docx), "listName": "A1", "rows": extra})
+        self.assertEqual((res["added"], res["total"]), (3, 3))
+        self.assertEqual(self.rpc("preview-import", {"path": str(docx)})["duplicates"], 2)
+        words = {w["word"]: w for w in self.rpc("list-words", {"name": "A1"})["words"]}
+        self.assertEqual(words["dizzy"]["meaning"], "başı dönen")
+
+        calls = []
+
+        def fake_runner(argv, **kw):
+            calls.append(argv)
+            out = {"is_error": False, "structured_output": {"rows": [
+                {"word": "curiosity", "meaning": "merak", "example": "", "translation": ""},
+                {"word": "", "meaning": "boş kelime atılır", "example": "", "translation": ""},
+            ]}}
+            return subprocess.CompletedProcess(argv, 0, json.dumps(out), "")
+
+        settings = {"aiProvider": "claude", "targetLang": "English", "meaningLang": "Turkish"}
+        ai_rows = ai_parse_lines(["curiosity -> merak"] * 31, settings, runner=fake_runner)
+        self.assertEqual(len(calls), 2)  # 30'luk parçalar
+        self.assertEqual([(r.word, r.meaning) for r in ai_rows], [("curiosity", "merak")] * 2)
+
     def test_legacy_kelime_db_migration_and_csv_export(self) -> None:
         import sqlite3
         import time
@@ -951,6 +1042,18 @@ Item {{
         }})
         wait(10)
         collectIssues(listsPage, "ListsPagePreview[" + cb.lang + "@" + cb.w + "]", allIssues)
+
+        listsPage.previewData = ({{
+          kind: "docx",
+          total: 29,
+          duplicates: 3,
+          unparsed: 2,
+          unparsedSample: ["A1 Kelime Listesi (Very Long Document Title Line)", "Unit 1 - Food and drink vocabulary"],
+          aiAvailable: cb.lang === "en",
+          rows: [{{ word: "constant", meaning: "sürekli, sabit", example: "" }}]
+        }})
+        wait(10)
+        collectIssues(listsPage, "ListsPageTextPreview[" + cb.lang + "@" + cb.w + "]", allIssues)
       }}
       verify(allIssues.length === 0, "Layout overflows detected:\\n" + allIssues.join("\\n"))
     }}

@@ -16,6 +16,7 @@ Item {
   property string previewPath: ""
   property string importListName: ""
   property var importCols: [0, 1, 2, 3]
+  property bool aiReading: false
   property string importFeedback: ""
 
   property string inspectedListName: ""
@@ -69,11 +70,16 @@ Item {
     })
   }
 
-  function loadPreview(filePath, cols, resetName) {
+  function loadPreview(filePath, cols, resetName, useAi) {
     if (!service || !filePath) return
     previewPath = String(filePath)
     importCols = cols
+    aiReading = !!useAi
+    var reqPath = previewPath
     service.previewImport(filePath, cols, function(res) {
+      root.aiReading = false
+      // AI beklerken önizleme kapatıldıysa geç gelen cevap ekranı yeniden açmasın.
+      if (root.previewPath !== reqPath) return
       if (res && res.ok) {
         root.previewData = res
         if (resetName) root.importListName = String(res.name || "Imported")
@@ -83,7 +89,7 @@ Item {
           ? String(res.error)
           : Theme.t(root.lang, "Dosya okunamadı.", "Could not read file.")
       }
-    })
+    }, useAi)
   }
 
   function cycleColumn(slotIndex, delta) {
@@ -113,8 +119,9 @@ Item {
   }
 
   function runConfirmImport() {
-    if (!service || !previewPath) return
+    if (!service || !previewPath || aiReading) return
     var targetName = String(importListName || "").trim()
+    var fixedRows = previewData && previewData.kind !== "csv" ? previewData.rows : null
     service.confirmImport(previewPath, targetName, importCols, function(res) {
       root.previewData = null
       root.previewPath = ""
@@ -124,7 +131,7 @@ Item {
       } else if (res && res.error) {
         root.importFeedback = String(res.error)
       }
-    })
+    }, fixedRows)
   }
 
   function openListInspector(item) {
@@ -175,8 +182,8 @@ Item {
           wrapMode: Text.WordWrap
           text: Theme.t(
             root.lang,
-            "Aktif listelerden soru çekilir; CSV, TSV veya numaralı tablo PDF aktarabilirsin.",
-            "Questions are drawn from enabled decks; import CSV, TSV, or numbered PDF tables."
+            "Aktif listelerden soru çekilir; CSV, TSV, PDF, DOCX, ODT veya TXT kelime listesi aktarabilirsin.",
+            "Questions are drawn from enabled decks; import word lists from CSV, TSV, PDF, DOCX, ODT, or TXT."
           )
           font.family: root.fontFamily
           font.pixelSize: 12
@@ -700,7 +707,9 @@ Item {
             if (!root.previewData) return ""
             var fmt = String(root.previewData.kind || "csv").toUpperCase()
             var tot = Number(root.previewData.total) || 0
-            return fmt + " · " + tot + " " + Theme.t(root.lang, "satır bulundu", "rows parsed")
+            var dup = Number(root.previewData.duplicates) || 0
+            return fmt + " · " + tot + " " + Theme.t(root.lang, "kelime bulundu", "words found")
+              + (dup > 0 ? " · " + dup + " " + Theme.t(root.lang, "zaten listende", "already saved") : "")
           }
           font.family: root.fontFamily
           font.pixelSize: 13
@@ -784,10 +793,91 @@ Item {
       }
     }
 
-    // 10 satırlık önizleme tablosu
+    // Kuralların okuyamadığı satırlar: örnek + isteğe bağlı AI ile okuma
+    Rectangle {
+      id: unparsedBox
+      readonly property int count: root.previewData ? (Number(root.previewData.unparsed) || 0) : 0
+      readonly property bool canAi: !!(root.previewData && root.previewData.aiAvailable)
+      visible: count > 0 || root.aiReading
+      width: parent.width
+      height: 56
+      radius: 8
+      color: root.tokens.surface || "#32302f"
+      border.width: 1
+      border.color: root.tokens.line || Qt.rgba(1, 1, 1, 0.10)
+
+      Column {
+        anchors.left: parent.left
+        anchors.right: aiReadBtn.visible ? aiReadBtn.left : parent.right
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 3
+
+        Text {
+          width: parent.width
+          elide: Text.ElideRight
+          text: root.aiReading
+            ? Theme.t(root.lang, "AI satırları okuyor… (bir dakika sürebilir)", "AI is reading the lines… (may take a minute)")
+            : unparsedBox.count + " " + Theme.t(root.lang, "satır okunamadı, atlanacak", "lines not recognized, will be skipped")
+              + (unparsedBox.canAi ? "" : Theme.t(root.lang, " · Ayarlar'dan AI açarsan okunabilir", " · enable AI in Settings to read them"))
+          font.family: root.fontFamily
+          font.pixelSize: 12
+          font.weight: Font.Medium
+          color: root.tokens.ink || "#ebdbb2"
+        }
+
+        Text {
+          width: parent.width
+          elide: Text.ElideRight
+          visible: !root.aiReading
+          text: root.previewData && root.previewData.unparsedSample
+            ? root.previewData.unparsedSample.join("  ·  ")
+            : ""
+          font.family: root.fontFamily
+          font.pixelSize: 11
+          color: root.tokens.muted || "#a89984"
+        }
+      }
+
+      Rectangle {
+        id: aiReadBtn
+        visible: unparsedBox.canAi && !root.aiReading
+        anchors.right: parent.right
+        anchors.rightMargin: 10
+        anchors.verticalCenter: parent.verticalCenter
+        width: aiReadTxt.implicitWidth + 24
+        height: 32
+        radius: 7
+        color: aiReadArea.containsMouse
+          ? (root.tokens.raised || "#504945")
+          : Theme.withAlpha(root.tokens.ink || "#ffffff", 0.06)
+
+        Text {
+          id: aiReadTxt
+          anchors.centerIn: parent
+          text: Theme.t(root.lang, "AI ile oku", "Read with AI")
+          font.family: root.fontFamily
+          font.pixelSize: 12
+          font.weight: Font.DemiBold
+          color: root.tokens.ink || "#ebdbb2"
+        }
+
+        MouseArea {
+          id: aiReadArea
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.loadPreview(root.previewPath, root.importCols, false, true)
+        }
+      }
+    }
+
+    // Önizleme tablosu (CSV'de ilk 10 satır, diğer biçimlerde tüm liste)
     Rectangle {
       width: parent.width
       height: parent.height - ((root.previewData && root.previewData.kind === "csv") ? 240 : 172)
+        - (unparsedBox.visible ? 68 : 0)
       radius: 8
       color: root.tokens.surface || "#32302f"
       border.width: 1
@@ -857,7 +947,7 @@ Item {
         width: confirmImpTxt.implicitWidth + 28
         height: 34
         radius: 7
-        opacity: totRows > 0 ? 1.0 : 0.45
+        opacity: totRows > 0 && !root.aiReading ? 1.0 : 0.45
         color: confirmImpArea.containsMouse
           ? Theme.withAlpha(root.tokens.primaryBg || "#fe8019", 0.88)
           : (root.tokens.primaryBg || "#fe8019")
@@ -878,7 +968,7 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: {
-            if (parent.totRows > 0) root.runConfirmImport()
+            if (parent.totRows > 0 && !root.aiReading) root.runConfirmImport()
           }
         }
       }

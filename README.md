@@ -23,7 +23,7 @@ Lexis builds a quiet, everyday vocabulary habit while you work. Every few minute
   - **Primary Free Dictionary (zero login, zero quota):** Enriches captured words and powers the `Translate` tab via Wiktionary (`freedictionaryapi.com`), Tatoeba example pairs, and MyMemory.
   - **Optional CLI AI boost/judge:** Connect your existing **Gemini (`agy`)**, **Claude Code (`claude`)**, or **ChatGPT (`codex`)** subscription on its lowest-quota model (`gemini-3.8-flash-low`, `claude-haiku-5-5`, `gpt-5.6-luna`) for idioms missing from dictionaries and synonym grading on typed answers.
   - **Optional Local / Custom `/v1` endpoint:** 1-click presets for **Ollama** (`:11434/v1`), **LM Studio** (`:1234/v1`), **llama.cpp** (`:8080/v1`), and **OpenRouter**, with live `/v1/models` discovery.
-- **CSV, TSV & numbered PDF deck import:** Includes a built-in 30-word academic starter deck, interactive 4-column CSV mapper with 10-row live preview, multi-line PDF vocabulary table parser (`pdftotext -layout`), CSV backup export, and 1-click migration from legacy `kelime.db`.
+- **Word list import from CSV, TSV, PDF, DOCX, ODT, TXT & MD:** Recognizes common list shapes (`word - meaning`, `word = meaning`, `word (adj): meaning`, numbered/bulleted lines, tables, multi-line PDF tables via `pdftotext -layout`) and shows a full preview with skipped lines and duplicates before importing; unrecognized lines can optionally be read with your AI provider. Also includes a built-in 30-word academic starter deck, interactive 4-column CSV mapper, CSV backup export, and 1-click migration from legacy `kelime.db`.
 - **Live Omarchy theme sync + Gruvbox Classic:** Adapts automatically to your active Omarchy theme (`Commons.Color`) or locks to warm **Gruvbox Classic** dark mode.
 
 ---

@@ -587,8 +587,9 @@ Item {
     command: [
       "zenity",
       "--file-selection",
-      "--title=Import Vocabulary Deck (CSV / PDF)",
-      "--file-filter=CSV & PDF (*.csv *.tsv *.pdf) | *.csv *.CSV *.tsv *.TSV *.pdf *.PDF"
+      "--title=Import Vocabulary List",
+      "--file-filter=Word lists (csv tsv pdf docx odt txt md) | *.csv *.CSV *.tsv *.TSV *.pdf *.PDF *.docx *.DOCX *.odt *.ODT *.txt *.TXT *.md",
+      "--file-filter=All files | *"
     ]
     stdout: StdioCollector {
       waitForEnd: true
@@ -644,18 +645,17 @@ Item {
     importPickerProc.running = true
   }
 
-  function previewImport(path, cols, cb) {
-    enqueueRpc("preview-import", { path: String(path || ""), columns: cols || [0, 1, 2, 3] }, function(res) {
+  function previewImport(path, cols, cb, useAi) {
+    enqueueRpc("preview-import", { path: String(path || ""), columns: cols || [0, 1, 2, 3], useAi: !!useAi }, function(res) {
       if (cb) cb(res)
     })
   }
 
-  function confirmImport(path, listName, cols, cb) {
-    enqueueRpc("confirm-import", _queryStatePayload({
-      path: String(path || ""),
-      listName: String(listName || ""),
-      columns: cols || [0, 1, 2, 3]
-    }), function(res) {
+  // rows verilirse (CSV dışı önizleme, AI dahil) backend dosyayı yeniden çözmeden aynen ekler.
+  function confirmImport(path, listName, cols, cb, rows) {
+    var payload = { path: String(path || ""), listName: String(listName || ""), columns: cols || [0, 1, 2, 3] }
+    if (rows) payload.rows = rows
+    enqueueRpc("confirm-import", _queryStatePayload(payload), function(res) {
       if (cb) cb(res)
     })
   }
