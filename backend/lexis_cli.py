@@ -23,6 +23,9 @@ import zipfile
 # Aralıklı tekrar sabitleri (eski kelime uygulamasıyla birebir aynı)
 INTERVALS = [600, 1800, 7200, 86400, 3 * 86400, 7 * 86400]
 RETRY = 600
+SKIP_DELAY = 1800  # ✕ ile atlanan kelime "şimdi değil" demektir: yanlış cevaptan daha geç döner
+RECENT_GAP = 3  # son bu kadar soruda gelen kelime, başka seçenek varken yeniden sorulmaz
+REVIEWS_PER_NEW = 2  # bu kadar tekrar sorusundan sonra sırada yeni kelime varsa o tanıtılır
 SETTLED_BOX = 4
 NEW_PER_DAY = 20
 DAY_SEC = 86400
@@ -1833,6 +1836,20 @@ class Store:
             ).fetchone()[0]
         )
 
+    def recent_word_ids(self, limit: int) -> set[int]:
+        rows = self.con.execute(
+            "SELECT word_id FROM events WHERE result != 'hidden' ORDER BY ts DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+        return {int(r[0]) for r in rows}
+
+    def reviews_since_intro(self) -> int:
+        return int(
+            self.con.execute(
+                "SELECT COUNT(*) FROM events WHERE result IN ('correct', 'wrong', 'skipped')"
+                " AND ts > COALESCE((SELECT MAX(ts) FROM events WHERE result = 'intro'), 0)"
+            ).fetchone()[0]
+        )
+
 
 def migrate_legacy_db(store: Store, legacy_file: Path) -> dict[str, int]:
     src = sqlite3.connect(str(legacy_file))
@@ -1908,15 +1925,24 @@ def migrate_legacy_db(store: Store, legacy_file: Path) -> dict[str, int]:
 
 
 def pick_word(store: Store, now: float) -> Word | None:
+    """Sıradaki kelime: vadesi gelen tekrarlar önce, ama yeni kelimeler araya karışır ve son sorulanlar beklemeye alınır.
+
+    Önceki hali hep en eski vadeli kelimeyi seçiyordu; birkaç kelime 10 dakikada bir vadeye girince
+    aynı dörtlü dönüp duruyor, yeni kelimeler hiç tanıtılmıyordu.
+    """
     due = store.due_words(now)
-    if due:
-        return due[0]
-    if store.introduced_today(now) < NEW_PER_DAY:
-        fresh = store.new_words(1)
-        if fresh:
-            return fresh[0]
+    fresh = store.new_words(1) if store.introduced_today(now) < NEW_PER_DAY else []
+    if fresh and (not due or store.reviews_since_intro() >= REVIEWS_PER_NEW):
+        return fresh[0]
+    recent = store.recent_word_ids(RECENT_GAP)
+    due_ok = [w for w in due if w.id not in recent]
+    if due_ok:
+        return due_ok[0]
+    if fresh:
+        return fresh[0]
     seen = [w for w in store.askable() if w.box >= 0]
-    return min(seen, key=lambda w: (w.due_at, w.id)) if seen else None
+    pool = [w for w in seen if w.id not in recent] or seen
+    return min(pool, key=lambda w: (w.due_at, w.id)) if pool else None
 
 
 def apply_srs(
@@ -1935,7 +1961,7 @@ def apply_srs(
     elif result == "wrong":
         store.update_word(word.id, box=0, due_at=now + RETRY)
     elif result == "skipped":
-        store.update_word(word.id, due_at=now + RETRY)
+        store.update_word(word.id, due_at=now + SKIP_DELAY)
     elif result == "hidden":
         store.set_hidden(word.id, True)
     store.log_event(word.id, qtype or ("intro" if result == "intro" else ""), result, answer, ts=now)

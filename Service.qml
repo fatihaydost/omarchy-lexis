@@ -58,6 +58,13 @@ Item {
 
   // Aktif sağ üst soru ve geri bildirim durumu
   property var activeQuestion: null
+  // Soru cevaplanınca, atlanınca ya da gizlenince bir sonraki soru tam aralık kadar sonra gelir
+  onActiveQuestionChanged: {
+    if (activeQuestion === null) {
+      _lastQuizEpoch = Math.floor(Date.now() / 1000)
+      _recomputeCountdown()
+    }
+  }
   property var feedbackToast: null
   property bool judging: false
   property bool translating: false

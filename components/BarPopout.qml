@@ -64,6 +64,21 @@ Item {
     })
   }
 
+  // Soru aralığı: bir sonraki sorunun ne zaman geleceği buradan değişir (Ayarlar'daki aynı değer)
+  readonly property var intervalChoices: [3, 5, 10, 15, 30]
+  readonly property int intervalMin: service && service.settings ? (Number(service.settings.intervalMin) || 5) : 5
+
+  function setInterval(m) {
+    if (service && m !== intervalMin) service.saveSettings({ intervalMin: m })
+  }
+
+  function stepInterval(delta) {
+    var list = intervalChoices
+    var i = list.indexOf(intervalMin)
+    if (i < 0) i = delta > 0 ? -1 : list.length
+    setInterval(list[(i + delta + list.length) % list.length])
+  }
+
   function triggerNavIndex(idx) {
     if (!service) return
     if (idx === 0) {
@@ -74,15 +89,17 @@ Item {
     } else if (idx === 2) {
       service.muteFor(service.isMuted ? 0 : 60)
     } else if (idx === 3) {
-      close()
-      service.openMainPanel("today")
+      stepInterval(1)
     } else if (idx === 4) {
       close()
-      service.openMainPanel("words")
+      service.openMainPanel("today")
     } else if (idx === 5) {
       close()
-      service.openMainPanel("translate")
+      service.openMainPanel("words")
     } else if (idx === 6) {
+      close()
+      service.openMainPanel("translate")
+    } else if (idx === 7) {
       close()
       service.openMainPanel("settings")
     }
@@ -132,14 +149,19 @@ Item {
         if (quickInput.activeFocus) return
         if (k === Qt.Key_Down || k === Qt.Key_Tab) {
           event.accepted = true
-          root.kbIndex = root.kbActive ? ((root.kbIndex + 1) % 7) : 0
+          root.kbIndex = root.kbActive ? ((root.kbIndex + 1) % 8) : 0
           root.kbActive = true
           return
         }
         if (k === Qt.Key_Up || k === Qt.Key_Backtab) {
           event.accepted = true
-          root.kbIndex = root.kbActive ? ((root.kbIndex + 6) % 7) : 0
+          root.kbIndex = root.kbActive ? ((root.kbIndex + 7) % 8) : 0
           root.kbActive = true
+          return
+        }
+        if (root.kbActive && root.kbIndex === 3 && (k === Qt.Key_Left || k === Qt.Key_Right)) {
+          event.accepted = true
+          root.stepInterval(k === Qt.Key_Right ? 1 : -1)
           return
         }
         if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) {
@@ -356,6 +378,64 @@ Item {
         }
       }
 
+      // --- Soru Aralığı ---
+      Rectangle {
+        readonly property bool kbSel: root.kbActive && root.kbIndex === 3
+        width: parent.width
+        height: intervalRow.implicitHeight + 10
+        radius: 6
+        color: kbSel ? Theme.withAlpha(Commons.Color.popups.text, 0.08) : "transparent"
+        border.width: kbSel ? 1 : 0
+        border.color: Theme.withAlpha(Commons.Color.popups.text, 0.4)
+
+        Row {
+          id: intervalRow
+          anchors.verticalCenter: parent.verticalCenter
+          anchors.left: parent.left
+          anchors.leftMargin: 5
+          spacing: 5
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: Theme.t(root.lang, "Her", "Every")
+            font.family: Style.font.family
+            font.pixelSize: 11
+            color: Theme.withAlpha(Commons.Color.popups.text, 0.58)
+          }
+
+          Repeater {
+            model: root.intervalChoices
+            delegate: Rectangle {
+              readonly property bool sel: root.intervalMin === modelData
+              width: chipTxt.implicitWidth + 14
+              height: 24
+              radius: 5
+              color: sel
+                ? Commons.Color.accent
+                : (chipArea.containsMouse ? Theme.withAlpha(Commons.Color.popups.text, 0.14) : Theme.withAlpha(Commons.Color.popups.text, 0.07))
+
+              Text {
+                id: chipTxt
+                anchors.centerIn: parent
+                text: modelData + Theme.t(root.lang, " dk", "m")
+                font.family: Style.font.family
+                font.pixelSize: 11
+                font.weight: parent.sel ? Font.DemiBold : Font.Normal
+                color: parent.sel ? (root.tokens.primaryInk || "#1d2021") : Commons.Color.popups.text
+              }
+
+              MouseArea {
+                id: chipArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.setInterval(modelData)
+              }
+            }
+          }
+        }
+      }
+
       Rectangle {
         width: parent.width
         height: 1
@@ -369,10 +449,10 @@ Item {
 
         Repeater {
           model: [
-            { tab: "today", idx: 3, label: Theme.t(root.lang, "Lexis panelini aç…", "Open Lexis panel…") },
-            { tab: "words", idx: 4, label: Theme.t(root.lang, "Kelimeler…", "Words…") },
-            { tab: "translate", idx: 5, label: Theme.t(root.lang, "Çeviri…", "Translate…") },
-            { tab: "settings", idx: 6, label: Theme.t(root.lang, "Ayarlar…", "Settings…") }
+            { tab: "today", idx: 4, label: Theme.t(root.lang, "Lexis panelini aç…", "Open Lexis panel…") },
+            { tab: "words", idx: 5, label: Theme.t(root.lang, "Kelimeler…", "Words…") },
+            { tab: "translate", idx: 6, label: Theme.t(root.lang, "Çeviri…", "Translate…") },
+            { tab: "settings", idx: 7, label: Theme.t(root.lang, "Ayarlar…", "Settings…") }
           ]
           delegate: Rectangle {
             readonly property bool kbSel: root.kbActive && root.kbIndex === modelData.idx

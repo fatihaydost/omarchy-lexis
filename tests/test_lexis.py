@@ -397,6 +397,26 @@ class LexisCoreTests(unittest.TestCase):
             rows, _ = read_text_import(pdf)
         self.assertEqual([r.word for r in rows], ["constant", "dizzy"])
 
+    def test_pick_word_mixes_new_words_and_avoids_recent_repeats(self) -> None:
+        os.environ.update({k: self.env[k] for k in ("LEXIS_DB", "LEXIS_CONFIG", "LEXIS_STATE_DIR")})
+        from backend import lexis_cli as lx
+
+        store = lx.Store(lx.db_path())
+        for i in range(12):
+            store.add_word(f"word{chr(97 + i)}", meaning=f"anlam {i}", list_name="Deck")
+        now, asked, intros = 1_800_000_000.0, [], 0
+        for _ in range(24):
+            w = lx.pick_word(store, now)
+            res = "intro" if w.box == -1 else ("wrong" if len(asked) % 3 == 0 else "skipped")
+            intros += res == "intro"
+            lx.apply_srs(store, w, res, now, qtype="" if res == "intro" else "choice_word_meaning")
+            asked.append(w.word)
+            now += 300
+        for a, b in zip(asked, asked[1:]):
+            self.assertNotEqual(a, b, asked)  # aynı kelime üst üste gelmez
+        self.assertGreaterEqual(intros, 7, asked)  # tekrarlar yeni kelimelerin önünü kesmez
+        self.assertGreaterEqual(len(set(asked)), 8, asked)
+
     def test_legacy_kelime_db_migration_and_csv_export(self) -> None:
         import sqlite3
         import time
@@ -843,14 +863,16 @@ TestCase {{
     compare(typeof Bridge.decideQuizTick, "function")
     var dTyping = Bridge.decideQuizTick(1500, 1000, 300, 0, false, true, true, false)
     compare(dTyping.action, "defer_typing")
-    compare(dTyping.nextLastEpoch, 1230)
+    compare(dTyping.nextLastEpoch, 1000)
 
     var dJudging = Bridge.decideQuizTick(1500, 1000, 300, 0, false, true, false, true)
     compare(dJudging.action, "defer_typing")
-    compare(dJudging.nextLastEpoch, 1230)
+    compare(dJudging.nextLastEpoch, 1000)
 
+    // Cevaplanmamış kart beklerken yeni soru çekilmez (kelime "atlandı" sayılıp döngüye girmesin)
     var dIdleCard = Bridge.decideQuizTick(1500, 1000, 300, 0, false, true, false, false)
-    compare(dIdleCard.action, "draw")
+    compare(dIdleCard.action, "hold")
+    compare(Bridge.decideQuizTick(1500, 1000, 300, 0, false, false, false, false).action, "draw")
   }}
 }}
 """,

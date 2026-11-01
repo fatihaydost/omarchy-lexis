@@ -66,8 +66,11 @@ function decideQuizTick(nowSec, lastQuizEpoch, intervalSec, mutedUntil, systemPa
   if ((nowSec - lastQuizEpoch) < intervalSec) {
     return { action: "countdown", nextLastEpoch: lastQuizEpoch }
   }
-  if (hasActiveQuestion && (inputActive || judging)) {
-    return { action: "defer_typing", nextLastEpoch: nowSec - intervalSec + 30 }
+  // Kart kendiliğinden kapanmaz: cevaplanmamış soru beklerken yenisi çekilmez. Eskiden süre dolunca
+  // kart değiştiriliyor ve kelime "atlandı" sayılıyordu; aynı birkaç kelime dönüp duruyordu.
+  // Sayaç, kart kapanınca (Service.onActiveQuestionChanged) yeniden başlar.
+  if (hasActiveQuestion) {
+    return { action: (inputActive || judging) ? "defer_typing" : "hold", nextLastEpoch: lastQuizEpoch }
   }
   return { action: "draw", nextLastEpoch: nowSec }
 }
