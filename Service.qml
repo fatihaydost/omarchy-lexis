@@ -525,6 +525,14 @@ Item {
     enqueueRpc("set-hidden", _queryStatePayload({ wordId: Number(wordId), hidden: !!hidden }), null)
   }
 
+  function setWordsLearned(ids, learned, cb) {
+    enqueueRpc("set-learned", _queryStatePayload({ ids: ids || [], learned: !!learned }), function(res) { if (cb) cb(res) })
+  }
+
+  function deleteWords(ids, cb) {
+    enqueueRpc("delete-words", _queryStatePayload({ ids: ids || [] }), function(res) { if (cb) cb(res) })
+  }
+
   function setListEnabled(name, enabled) {
     enqueueRpc("set-list-enabled", _queryStatePayload({ name: String(name), enabled: !!enabled }), null)
   }

@@ -421,6 +421,31 @@ class LexisCoreTests(unittest.TestCase):
         self.assertGreaterEqual(intros, 7, asked)  # tekrarlar yeni kelimelerin önünü kesmez
         self.assertGreaterEqual(len(set(asked)), 8, asked)
 
+    def test_bulk_learned_and_delete_words(self) -> None:
+        ids = [self.rpc("add-word", {"word": w, "meaning": f"anlam {w}", "listName": "Deck"})["wordId"]
+               for w in ("alpha", "beta", "gamma", "delta")]
+        self.rpc("next-question", {"wordId": ids[0], "now": 1_700_000_000.0})
+        self.rpc("grade-question", {"wordId": ids[0], "qtype": "intro", "action": "intro", "now": 1_700_000_000.0})
+
+        res = self.rpc("set-learned", {"ids": ids[:2], "learned": True})
+        self.assertEqual(res["changed"], 2)
+        self.assertEqual({w["word"] for w in res["words"]}, {"gamma", "delta"})  # Hepsi görünümünden çıkar
+        learned = self.rpc("snapshot", {"listFilter": "__learned__"})["words"]
+        self.assertEqual({w["word"] for w in learned}, {"alpha", "beta"})
+        self.assertTrue(all(w["learned"] and not w["hidden"] for w in learned))
+        for _ in range(4):  # öğrenilen kelime bir daha sorulmaz
+            q = self.rpc("next-question", {})["question"]
+            self.assertNotIn(q["wordId"], ids[:2])
+
+        self.rpc("set-learned", {"ids": [ids[1]], "learned": False})
+        self.assertIn("beta", {w["word"] for w in self.rpc("snapshot", {})["words"]})
+
+        res = self.rpc("delete-words", {"ids": [ids[0], ids[2], "x"]})
+        self.assertEqual(res["changed"], 2)
+        left = {w["word"] for w in self.rpc("snapshot", {})["words"]}
+        left |= {w["word"] for w in self.rpc("snapshot", {"listFilter": "__learned__"})["words"]}
+        self.assertEqual(left, {"beta", "delta"})
+
     def test_legacy_kelime_db_migration_and_csv_export(self) -> None:
         import sqlite3
         import time
@@ -1109,6 +1134,7 @@ Item {{
           recent: [{{ id: 1, word: "mitigate", correct: true, qtype: "choice_word_meaning", ts: "12:04" }}]
         }})
         wordsPage.formMode = "add"
+        wordsPage.selectedIds = ({{ 1: true }})  // toplu seçim çubuğu (Öğrendim / Sil / ✕) da sığmalı
         listsPage.inspectedListName = "Academic Starter Deck (Very Long Custom Deck Title)"
         listsPage.inspectedListSource = "/tmp/starter.csv"
         listsPage.inspectedWords = [{{ id: 1, word: "mitigate", meaning: "hafifletmek, azaltmak", box: 2 }}]

@@ -119,6 +119,8 @@ SELECT_WORDS = (
     " w.hidden, w.enriched, w.box, w.due_at, COALESCE(w.created_at, 0), COALESCE(l.name, 'Custom')"
     " FROM words w LEFT JOIN lists l ON l.id = w.list_id"
 )
+# hidden sütunu kelimenin durumunu taşır: 0 sorulur, 1 gizli ("bir daha gösterme"), 2 öğrendim
+LEARNED = 2
 ASKABLE_WHERE = "w.hidden = 0 AND w.meaning != '' AND COALESCE(l.enabled, 1) = 1"
 
 DEFAULT_SETTINGS = {
@@ -1712,9 +1714,30 @@ class Store:
     def set_hidden(self, word_id: int, hidden: bool) -> None:
         self.update_word(word_id, hidden=int(bool(hidden)))
 
+    def set_learned(self, word_ids: list[int], learned: bool) -> int:
+        ids = [int(i) for i in word_ids]
+        if not ids:
+            return 0
+        marks = ",".join("?" for _ in ids)
+        cur = self.con.execute(f"UPDATE words SET hidden = ? WHERE id IN ({marks})", (LEARNED if learned else 0, *ids))
+        self.con.commit()
+        return cur.rowcount
+
+    def delete_words(self, word_ids: list[int]) -> int:
+        ids = [int(i) for i in word_ids]
+        if not ids:
+            return 0
+        marks = ",".join("?" for _ in ids)
+        self.con.execute(f"DELETE FROM events WHERE word_id IN ({marks})", ids)
+        cur = self.con.execute(f"DELETE FROM words WHERE id IN ({marks})", ids)
+        self.con.commit()
+        return cur.rowcount
+
     def query_words(self, query: str = "", list_filter: str = "") -> list[Word]:
         if list_filter == "__hidden__":
             where, args = ["w.hidden = 1"], []
+        elif list_filter == "__learned__":
+            where, args = [f"w.hidden = {LEARNED}"], []
         elif list_filter == "__custom__":
             where, args = ["w.hidden = 0", "l.name IN ('Custom', 'Kendi')"], []
         elif list_filter:
@@ -2136,7 +2159,8 @@ def word_to_dict(w: Word, last5: list[str] | None = None, history: list[str] | N
         "example": w.example,
         "translation": w.translation,
         "listName": w.list_name,
-        "hidden": bool(w.hidden),
+        "hidden": w.hidden == 1,
+        "learned": w.hidden == LEARNED,
         "enriched": bool(w.enriched),
         "box": w.box,
         "dueAt": w.due_at,
@@ -2432,6 +2456,16 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 return {"ok": False, "error": "Word not found"}
             store.set_hidden(wid, hidden)
             return build_snapshot(store, settings, payload)
+
+        if cmd in ("set-learned", "delete-words"):
+            ids = [int(i) for i in (payload.get("ids") or [])[:10000] if str(i).lstrip("-").isdigit()]
+            if cmd == "set-learned":
+                changed = store.set_learned(ids, bool(payload.get("learned", True)))
+            else:
+                changed = store.delete_words(ids)
+            snap = build_snapshot(store, settings, payload)
+            snap["changed"] = changed
+            return snap
 
         if cmd == "set-list-enabled":
             name = str(payload.get("name") or "").strip()

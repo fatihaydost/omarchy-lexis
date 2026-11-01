@@ -37,7 +37,52 @@ Item {
     return true
   }
 
+  // Toplu seçim: id -> true. Silme iki adımlıdır (confirmDelete), Esc önce onayı sonra seçimi kapatır.
+  property var selectedIds: ({})
+  property bool confirmDelete: false
+  readonly property int selCount: Object.keys(selectedIds).length
+  readonly property bool allSelected: words.length > 0 && selCount === words.length
+
+  function toggleSel(wordId) {
+    var next = Object.assign({}, selectedIds)
+    if (next[wordId]) delete next[wordId]
+    else next[wordId] = true
+    selectedIds = next
+    confirmDelete = false
+  }
+
+  function clearSel() {
+    selectedIds = ({})
+    confirmDelete = false
+  }
+
+  function selectAllVisible() {
+    var next = {}
+    for (var i = 0; i < words.length; i++) next[words[i].id] = true
+    selectedIds = next
+    confirmDelete = false
+  }
+
+  function selectedList() {
+    return Object.keys(selectedIds).map(function(k) { return Number(k) })
+  }
+
+  // Liste değişince (filtre, arama, silme) artık görünmeyen seçimleri bırak
+  onWordsChanged: {
+    var keep = {}
+    for (var i = 0; i < words.length; i++) if (selectedIds[words[i].id]) keep[words[i].id] = true
+    if (Object.keys(keep).length !== selCount) selectedIds = keep
+  }
+
   function dismissOverlay() {
+    if (confirmDelete) {
+      confirmDelete = false
+      return true
+    }
+    if (selCount > 0) {
+      clearSel()
+      return true
+    }
     if (listDropdownOpen) {
       listDropdownOpen = false
       return true
@@ -83,7 +128,7 @@ Item {
     formMeaning = ""
     formExample = ""
     formTranslation = ""
-    formListName = (activeFilter && activeFilter !== "__custom__" && activeFilter !== "__hidden__")
+    formListName = (activeFilter && activeFilter.indexOf("__") !== 0)
       ? activeFilter
       : "Custom"
     Qt.callLater(function() { fWordInput.forceActiveFocus() })
@@ -247,7 +292,8 @@ Item {
             model: [
               { key: "", label: Theme.t(root.lang, "Hepsi", "All") },
               { key: "__custom__", label: Theme.t(root.lang, "Kendi", "Custom") },
-              { key: "__hidden__", label: Theme.t(root.lang, "Gizli", "Hidden") }
+              { key: "__hidden__", label: Theme.t(root.lang, "Gizli", "Hidden") },
+              { key: "__learned__", label: Theme.t(root.lang, "Öğrendim", "Learned") }
             ]
             delegate: Rectangle {
               readonly property bool sel: root.activeFilter === modelData.key
@@ -288,8 +334,7 @@ Item {
 
           Rectangle {
             readonly property bool customListActive: root.activeFilter !== ""
-              && root.activeFilter !== "__custom__"
-              && root.activeFilter !== "__hidden__"
+              && root.activeFilter.indexOf("__") !== 0
             width: Math.max(66, Math.min(106, deckChipTxt.implicitWidth + 16))
             height: 24
             radius: 6
@@ -397,23 +442,141 @@ Item {
           }
         }
 
-        Text {
-          text: root.words.length + " " + Theme.t(root.lang, "kelime", root.words.length === 1 ? "word" : "words")
-          font.family: root.fontFamily
-          font.pixelSize: 11
-          color: root.tokens.muted || "#a89984"
+        // Toplu seçim çubuğu: tümünü seç kutusu + sayı; seçim varken Öğrendim / Sil / ✕
+        Item {
+          id: bulkBar
+          width: parent.width
+          height: 26
+
+          Item {
+            id: allBox
+            anchors.left: parent.left
+            anchors.leftMargin: 4
+            anchors.verticalCenter: parent.verticalCenter
+            width: 26
+            height: 26
+            visible: root.words.length > 0
+
+            Rectangle {
+              anchors.centerIn: parent
+              width: 14
+              height: 14
+              radius: 3
+              color: root.allSelected ? (root.tokens.accent || "#fe8019") : "transparent"
+              border.width: 1
+              border.color: (root.selCount > 0) ? (root.tokens.accent || "#fe8019") : (root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.3))
+
+              Text {
+                anchors.centerIn: parent
+                visible: root.selCount > 0
+                text: root.allSelected ? "✓" : "–"
+                font.pixelSize: 10
+                font.weight: Font.Bold
+                color: root.allSelected ? (root.tokens.primaryInk || "#1d2021") : (root.tokens.accent || "#fe8019")
+              }
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.allSelected ? root.clearSel() : root.selectAllVisible()
+            }
+          }
+
+          Text {
+            anchors.left: allBox.visible ? allBox.right : parent.left
+            anchors.leftMargin: allBox.visible ? 2 : 0
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.confirmDelete
+              ? (root.selCount + Theme.t(root.lang, " silinsin mi?", " delete?"))
+              : root.selCount > 0
+              ? (root.selCount + Theme.t(root.lang, " seçili", " selected"))
+              : (root.words.length + " " + Theme.t(root.lang, "kelime", root.words.length === 1 ? "word" : "words"))
+            font.family: root.fontFamily
+            font.pixelSize: 11
+            font.weight: root.selCount > 0 ? Font.DemiBold : Font.Normal
+            color: root.selCount > 0 ? (root.tokens.ink || "#ebdbb2") : (root.tokens.muted || "#a89984")
+          }
+
+          Row {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            visible: root.selCount > 0
+
+            Repeater {
+              model: root.confirmDelete
+                ? [
+                    { act: "delete", label: Theme.t(root.lang, "Sil", "Delete"), danger: true },
+                    { act: "cancel", label: Theme.t(root.lang, "Vazgeç", "Cancel"), danger: false }
+                  ]
+                : [
+                    { act: "learned", label: root.activeFilter === "__learned__"
+                        ? Theme.t(root.lang, "Geri al", "Restore")
+                        : Theme.t(root.lang, "Öğrendim", "Learned"), danger: false },
+                    { act: "ask-delete", label: Theme.t(root.lang, "Sil", "Delete"), danger: true },
+                    { act: "clear", label: "✕", danger: false }
+                  ]
+              delegate: Rectangle {
+                width: bulkLbl.implicitWidth + 14
+                height: 22
+                radius: 5
+                color: bulkArea.containsMouse
+                  ? (modelData.danger ? Theme.withAlpha(root.tokens.danger || "#fb4934", 0.22) : (root.tokens.raised || "#504945"))
+                  : (modelData.danger && root.confirmDelete ? Theme.withAlpha(root.tokens.danger || "#fb4934", 0.14) : (root.tokens.surface || "#32302f"))
+                border.width: 1
+                border.color: modelData.danger
+                  ? Theme.withAlpha(root.tokens.danger || "#fb4934", 0.5)
+                  : (root.tokens.line || Qt.rgba(1, 1, 1, 0.10))
+
+                Text {
+                  id: bulkLbl
+                  anchors.centerIn: parent
+                  text: modelData.label
+                  font.family: root.fontFamily
+                  font.pixelSize: 11
+                  color: modelData.danger ? (root.tokens.danger || "#fb4934") : (root.tokens.ink || "#ebdbb2")
+                }
+
+                MouseArea {
+                  id: bulkArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (!root.service) return
+                    var ids = root.selectedList()
+                    if (modelData.act === "learned") {
+                      root.service.setWordsLearned(ids, root.activeFilter !== "__learned__", null)
+                      root.clearSel()
+                    } else if (modelData.act === "ask-delete") {
+                      root.confirmDelete = true
+                    } else if (modelData.act === "delete") {
+                      root.service.deleteWords(ids, null)
+                      root.clearSel()
+                    } else if (modelData.act === "cancel") {
+                      root.confirmDelete = false
+                    } else {
+                      root.clearSel()
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
 
         // Kelime listesi
         ListView {
           id: wordsListView
           width: parent.width
-          height: Math.max(60, parent.height - 94 - filterChipsFlow.implicitHeight - (root.listDropdownOpen && root.lists.length > 0 ? Math.min(144, deckDropCol.implicitHeight + 20) : 0))
+          height: Math.max(60, parent.height - 106 - filterChipsFlow.implicitHeight - (root.listDropdownOpen && root.lists.length > 0 ? Math.min(144, deckDropCol.implicitHeight + 20) : 0))
           clip: true
           spacing: 2
           model: root.words
 
           delegate: Rectangle {
+            id: wordRow
             readonly property bool selected: !!(root.detail && Number(root.detail.id) === Number(modelData.id) && root.formMode !== "add")
             width: wordsListView.width
             height: 44
@@ -422,9 +585,11 @@ Item {
               ? (root.tokens.raised || "#504945")
               : (rowArea.containsMouse ? (root.tokens.surface || "#32302f") : "transparent")
 
+            readonly property bool checked: !!root.selectedIds[modelData.id]
+
             Column {
               anchors.left: parent.left
-              anchors.leftMargin: 10
+              anchors.leftMargin: 32
               anchors.right: dotsRow.left
               anchors.rightMargin: 8
               anchors.verticalCenter: parent.verticalCenter
@@ -481,7 +646,48 @@ Item {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: root.selectWordById(modelData.id)
+              onClicked: function(mouse) {
+                if (mouse.modifiers & Qt.ControlModifier) root.toggleSel(modelData.id)
+                else root.selectWordById(modelData.id)
+              }
+            }
+
+            // Seçim kutusu (satıra tıklamak ayrıntıyı açar; kutu ya da Ctrl+tık seçer)
+            Item {
+              anchors.left: parent.left
+              anchors.leftMargin: 4
+              anchors.verticalCenter: parent.verticalCenter
+              width: 26
+              height: 26
+
+              Rectangle {
+                anchors.centerIn: parent
+                width: 14
+                height: 14
+                radius: 3
+                color: wordRow.checked ? (root.tokens.accent || "#fe8019") : "transparent"
+                border.width: 1
+                border.color: wordRow.checked
+                  ? (root.tokens.accent || "#fe8019")
+                  : (boxArea.containsMouse ? (root.tokens.ink || "#ebdbb2") : (root.tokens.lineStrong || Qt.rgba(1, 1, 1, 0.3)))
+
+                Text {
+                  anchors.centerIn: parent
+                  visible: wordRow.checked
+                  text: "✓"
+                  font.pixelSize: 10
+                  font.weight: Font.Bold
+                  color: root.tokens.primaryInk || "#1d2021"
+                }
+              }
+
+              MouseArea {
+                id: boxArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.toggleSel(modelData.id)
+              }
             }
           }
         }
@@ -1024,6 +1230,40 @@ Item {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: root.openEditForm()
+            }
+          }
+
+          Rectangle {
+            width: dLearnLbl.implicitWidth + 22
+            height: 32
+            radius: 7
+            color: dLearnArea.containsMouse
+              ? (root.tokens.raised || "#504945")
+              : "transparent"
+            border.width: 1
+            border.color: root.tokens.line || Qt.rgba(1, 1, 1, 0.10)
+
+            Text {
+              id: dLearnLbl
+              anchors.centerIn: parent
+              text: (root.detail && root.detail.learned)
+                ? Theme.t(root.lang, "Tekrar sor", "Ask again")
+                : Theme.t(root.lang, "Öğrendim", "Learned")
+              font.family: root.fontFamily
+              font.pixelSize: 12
+              color: root.tokens.secondary || "#d5c4a1"
+            }
+
+            MouseArea {
+              id: dLearnArea
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                if (root.service && root.detail) {
+                  root.service.setWordsLearned([root.detail.id], !root.detail.learned, null)
+                }
+              }
             }
           }
 
