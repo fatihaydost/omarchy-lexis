@@ -199,6 +199,7 @@ Item {
             if (root.service.isMuted) {
               return Theme.t(root.lang, "Susturuldu · ", "Muted · ") + Theme.formatCountdown(root.service.nextInSeconds, root.lang)
             }
+            if (root.service.activeQuestion) return Theme.t(root.lang, "Kart bekliyor", "Card waiting")
             return Theme.t(root.lang, "Sıradaki: ", "Next in ") + Theme.formatCountdown(root.service.nextInSeconds, root.lang)
           }
           font.family: Style.font.family

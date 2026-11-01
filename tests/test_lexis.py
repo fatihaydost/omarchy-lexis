@@ -70,15 +70,19 @@ class LexisCoreTests(unittest.TestCase):
         self.assertIn("<b>mitigate</b>", q1["bodyHtml"])
         self.assertIn("<i>", q1["bodyHtml"])
 
-        # Replacing an unanswered intro card records it as intro (box -> 0) and draws next question
+        # Replacing an unread intro card does not count as learned: the word stays new and is postponed 30 min
         q2 = self.rpc(
             "next-question",
             {"wordId": ids[1], "now": now + 300, "replaceQuestion": {"wordId": ids[0], "qtype": "intro"}},
         )["question"]
         self.assertEqual(q2["wordId"], ids[1])
         snap_after_replace = self.rpc("snapshot", {"selectedWordId": ids[0]})
-        self.assertEqual(snap_after_replace["selectedWord"]["box"], 0)
-        self.assertAlmostEqual(snap_after_replace["selectedWord"]["dueAt"], now + 300 + 600, places=1)
+        self.assertEqual(snap_after_replace["selectedWord"]["box"], -1)
+        self.assertAlmostEqual(snap_after_replace["selectedWord"]["dueAt"], now + 300 + 1800, places=1)
+
+        # "Got it" on the intro card is what moves the word into review (box -> 0)
+        self.rpc("grade-question", {"wordId": ids[0], "qtype": "intro", "action": "intro", "now": now + 400})
+        self.assertEqual(self.rpc("snapshot", {"selectedWordId": ids[0]})["selectedWord"]["box"], 0)
 
         # At box == 0, word[0] must emit a 4-choice question
         q_choice = self.rpc("next-question", {"wordId": ids[0], "now": now + 1000})["question"]

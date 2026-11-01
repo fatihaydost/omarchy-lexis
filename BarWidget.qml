@@ -49,7 +49,9 @@ Ui.BarWidget {
     if (!svc) return "Lexis"
     var statusPart = svc.isMuted
       ? Theme.t(lang, "Susturuldu", "Muted")
-      : (Theme.t(lang, "Sıradaki: ", "Next in ") + Theme.formatCountdown(svc.nextInSeconds, lang))
+      : svc.activeQuestion
+        ? Theme.t(lang, "Kart bekliyor", "Card waiting")
+        : (Theme.t(lang, "Sıradaki: ", "Next in ") + Theme.formatCountdown(svc.nextInSeconds, lang))
     return "Lexis — " + counterText + " · " + statusPart
   }
 

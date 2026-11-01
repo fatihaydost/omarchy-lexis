@@ -1786,10 +1786,11 @@ class Store:
             "ORDER BY w.due_at ASC, w.id ASC",
         )
 
-    def new_words(self, limit: int) -> list[Word]:
+    def new_words(self, limit: int, now: float | None = None) -> list[Word]:
+        # Okunmadan atlanan tanışma kartı kelimeyi yeni bırakır ama due_at ile bir süre erteler
         return self._words(
-            f"{ASKABLE_WHERE} AND w.box = -1",
-            (int(limit),),
+            f"{ASKABLE_WHERE} AND w.box = -1 AND w.due_at <= ?",
+            (float(time.time() if now is None else now), int(limit)),
             "ORDER BY w.id ASC LIMIT ?",
         )
 
@@ -1836,11 +1837,15 @@ class Store:
             ).fetchone()[0]
         )
 
-    def recent_word_ids(self, limit: int) -> set[int]:
+    def recent_word_ids(self, limit: int, quizzed_only: bool = False) -> set[int]:
+        where = "qtype != 'intro' AND result IN ('correct', 'wrong', 'skipped')" if quizzed_only else "result != 'hidden'"
         rows = self.con.execute(
-            "SELECT word_id FROM events WHERE result != 'hidden' ORDER BY ts DESC LIMIT ?", (int(limit),)
+            f"SELECT word_id FROM events WHERE {where} ORDER BY ts DESC LIMIT ?", (int(limit),)
         ).fetchall()
         return {int(r[0]) for r in rows}
+
+    def last_asked(self) -> dict[int, float]:
+        return {int(w): float(t) for w, t in self.con.execute("SELECT word_id, MAX(ts) FROM events GROUP BY word_id")}
 
     def reviews_since_intro(self) -> int:
         return int(
@@ -1931,18 +1936,22 @@ def pick_word(store: Store, now: float) -> Word | None:
     aynı dörtlü dönüp duruyor, yeni kelimeler hiç tanıtılmıyordu.
     """
     due = store.due_words(now)
-    fresh = store.new_words(1) if store.introduced_today(now) < NEW_PER_DAY else []
+    fresh = store.new_words(1, now) if store.introduced_today(now) < NEW_PER_DAY else []
     if fresh and (not due or store.reviews_since_intro() >= REVIEWS_PER_NEW):
         return fresh[0]
-    recent = store.recent_word_ids(RECENT_GAP)
+    # Az önce tanıtılan kelime yalnız hemen ardından sorulmaz; tekrar engeli sorulmuş kelimelere uygulanır,
+    # yoksa yeni destede ilk kartların hepsi tanışma olurdu.
+    recent = store.recent_word_ids(1) | store.recent_word_ids(RECENT_GAP, quizzed_only=True)
     due_ok = [w for w in due if w.id not in recent]
     if due_ok:
         return due_ok[0]
     if fresh:
         return fresh[0]
+    # Vadesi gelen ve yeni kelime yok: en uzun süredir sorulmayan kelime (vade sırası aynı birkaç kelimeyi döndürürdü)
     seen = [w for w in store.askable() if w.box >= 0]
     pool = [w for w in seen if w.id not in recent] or seen
-    return min(pool, key=lambda w: (w.due_at, w.id)) if pool else None
+    last = store.last_asked()
+    return min(pool, key=lambda w: (last.get(w.id, 0.0), w.id)) if pool else None
 
 
 def apply_srs(
@@ -2685,13 +2694,8 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 prev_word = store.get(int(rep["wordId"]))
                 if prev_word:
                     prev_qt = str(rep.get("qtype") or "")
-                    apply_srs(
-                        store,
-                        prev_word,
-                        "intro" if prev_qt == "intro" else "skipped",
-                        now,
-                        qtype=prev_qt,
-                    )
+                    # Okunmadan değiştirilen tanışma kartı öğrenildi sayılmaz: kelime yeni kalır, ertelenir
+                    apply_srs(store, prev_word, "skipped", now, qtype=prev_qt)
             req_wid = int(payload.get("wordId") or 0)
             target = store.get(req_wid) if req_wid > 0 else pick_word(store, now)
             if not target or not target.meaning:
@@ -2717,7 +2721,8 @@ def handle_command(cmd: str, payload: dict) -> dict:
                 return snap
 
             if action == "skip":
-                res_kind = "intro" if qtype == "intro" else "skipped"
+                # ✕/Esc tanışma kartında da "şimdi değil" demektir: kelime yeni kalır, yarım saat sonra yeniden tanıtılır
+                res_kind = "skipped"
                 apply_srs(store, word, res_kind, now, qtype=qtype)
                 snap = build_snapshot(store, settings, payload)
                 snap.update({"status": "recorded", "result": res_kind, "feedback": None})

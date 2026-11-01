@@ -63,6 +63,9 @@ Item {
               return Theme.t(root.lang, "Sorular geçici olarak susturuldu · ", "Questions paused · ")
                 + Theme.formatCountdown(root.service.nextInSeconds, root.lang)
             }
+            if (root.service && root.service.activeQuestion) {
+              return Theme.t(root.lang, "Sağ üstte bir kart cevabını bekliyor.", "A card is waiting for your answer at the top-right.")
+            }
             return Theme.t(root.lang, "Sıradaki soru ", "Next question in ")
               + Theme.formatCountdown(root.service ? root.service.nextInSeconds : 300, root.lang)
               + Theme.t(root.lang, " sonra sağ üstte belirecek.", " at the top-right corner.")
@@ -228,6 +231,56 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: root.jumpToLists()
+          }
+        }
+      }
+
+      // Soru aralığı: hızlı paneldeki ve Ayarlar'daki aynı değer
+      Flow {
+        visible: root.totalWords > 0
+        width: parent.width
+        spacing: 6
+
+        Text {
+          height: 28
+          verticalAlignment: Text.AlignVCenter
+          text: Theme.t(root.lang, "Soru aralığı", "Ask every")
+          font.family: root.fontFamily
+          font.pixelSize: 12
+          color: root.tokens.muted || "#a89984"
+        }
+
+        Repeater {
+          model: [3, 5, 10, 15, 30]
+          delegate: Rectangle {
+            readonly property bool sel: root.service && root.service.settings
+              && (Number(root.service.settings.intervalMin) || 5) === modelData
+            width: ivTxt.implicitWidth + 18
+            height: 28
+            radius: 7
+            color: sel
+              ? (root.tokens.primaryBg || "#fe8019")
+              : (ivArea.containsMouse ? (root.tokens.raised || "#504945") : (root.tokens.surface || "#32302f"))
+            border.width: sel ? 0 : 1
+            border.color: root.tokens.line || Qt.rgba(1, 1, 1, 0.10)
+
+            Text {
+              id: ivTxt
+              anchors.centerIn: parent
+              text: modelData + Theme.t(root.lang, " dk", " min")
+              font.family: root.fontFamily
+              font.pixelSize: 12
+              font.weight: parent.sel ? Font.DemiBold : Font.Normal
+              color: parent.sel ? (root.tokens.primaryInk || "#1d2021") : (root.tokens.ink || "#ebdbb2")
+            }
+
+            MouseArea {
+              id: ivArea
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: if (root.service && !parent.sel) root.service.saveSettings({ intervalMin: modelData })
+            }
           }
         }
       }
