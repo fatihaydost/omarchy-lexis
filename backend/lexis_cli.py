@@ -1730,6 +1730,11 @@ class Store:
         marks = ",".join("?" for _ in ids)
         self.con.execute(f"DELETE FROM events WHERE word_id IN ({marks})", ids)
         cur = self.con.execute(f"DELETE FROM words WHERE id IN ({marks})", ids)
+        # Tamamen boşalan listeler de gider (silme eylemi yok, 0 kelimelik hayalet liste kalmasın); Custom kalır
+        self.con.execute(
+            "DELETE FROM lists WHERE name NOT IN ('Custom', 'Kendi')"
+            " AND NOT EXISTS (SELECT 1 FROM words w WHERE w.list_id = lists.id)"
+        )
         self.con.commit()
         return cur.rowcount
 
@@ -2240,14 +2245,15 @@ def build_snapshot(store: Store, settings: dict, payload: dict | None = None) ->
     by_type = {
         qt: round(100 * vals[0] / vals[1]) for qt, vals in type_buckets.items() if vals[1] > 0
     }
+    # Öğrenilen kelimeler sorulmaz ama kelime hazinesinde kalır: toplama ve oturmuşlara sayılır
     settled_count = int(
         con.execute(
-            "SELECT COUNT(*) FROM words WHERE hidden = 0 AND box >= ?",
-            (SETTLED_BOX,),
+            "SELECT COUNT(*) FROM words WHERE hidden = ? OR (hidden = 0 AND box >= ?)",
+            (LEARNED, SETTLED_BOX),
         ).fetchone()[0]
     )
     total_words = int(
-        con.execute("SELECT COUNT(*) FROM words WHERE hidden = 0").fetchone()[0]
+        con.execute("SELECT COUNT(*) FROM words WHERE hidden IN (0, ?)", (LEARNED,)).fetchone()[0]
     )
 
     words_list = store.query_words(query=query, list_filter=list_filter)
@@ -2255,13 +2261,11 @@ def build_snapshot(store: Store, settings: dict, payload: dict | None = None) ->
     words_out = [word_to_dict(w, last5=l5.get(w.id, [])) for w in words_list]
 
     selected_word = None
-    if selected_id > 0:
-        sw = store.get(selected_id)
-        if sw:
-            hist = store.full_history(sw.id, answered_only=True)
-            selected_word = word_to_dict(sw, last5=hist[-5:], history=hist)
-    elif words_list:
+    # Seçili kelime silindiyse listenin ilk kelimesine düş (panel boş kalmasın)
+    sw = store.get(selected_id) if selected_id > 0 else None
+    if sw is None and words_list:
         sw = words_list[0]
+    if sw:
         hist = store.full_history(sw.id, answered_only=True)
         selected_word = word_to_dict(sw, last5=hist[-5:], history=hist)
 

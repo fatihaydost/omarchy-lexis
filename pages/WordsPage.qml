@@ -72,6 +72,7 @@ Item {
     var keep = {}
     for (var i = 0; i < words.length; i++) if (selectedIds[words[i].id]) keep[words[i].id] = true
     if (Object.keys(keep).length !== selCount) selectedIds = keep
+    if (Object.keys(keep).length === 0) confirmDelete = false
   }
 
   function dismissOverlay() {
@@ -552,6 +553,7 @@ Item {
                     } else if (modelData.act === "ask-delete") {
                       root.confirmDelete = true
                     } else if (modelData.act === "delete") {
+                      if (root.formMode === "edit" && root.detail && ids.indexOf(Number(root.detail.id)) >= 0) root.formMode = ""
                       root.service.deleteWords(ids, null)
                       root.clearSel()
                     } else if (modelData.act === "cancel") {

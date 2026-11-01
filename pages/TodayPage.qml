@@ -123,7 +123,7 @@ Item {
             var rem = Math.max(0, root.goal - root.answered)
             if (rem === 0) return Theme.t(root.lang, "Günlük hedef tamamlandı.", "Daily goal reached.")
             return rem + " " + Theme.t(root.lang, "soru kaldı · toplam ", "left for today · ")
-              + root.totalWords + " " + Theme.t(root.lang, "aktif kelime", "active words")
+              + root.totalWords + " " + Theme.t(root.lang, "kelime", "words")
           }
           font.family: root.fontFamily
           font.pixelSize: 12

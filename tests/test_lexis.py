@@ -440,11 +440,25 @@ class LexisCoreTests(unittest.TestCase):
         self.rpc("set-learned", {"ids": [ids[1]], "learned": False})
         self.assertIn("beta", {w["word"] for w in self.rpc("snapshot", {})["words"]})
 
-        res = self.rpc("delete-words", {"ids": [ids[0], ids[2], "x"]})
+        stats = self.rpc("snapshot", {})["stats"]
+        self.assertEqual(stats["totalWords"], 4)  # öğrenilen kelime toplamdan düşmez
+        self.assertGreaterEqual(stats["settled"], 1)
+
+        # Seçili (açık) kelime silinince panel boş kalmaz, listedeki ilk kelimeye düşer
+        res = self.rpc("delete-words", {"ids": [ids[0], ids[2], "x"], "selectedWordId": ids[2]})
         self.assertEqual(res["changed"], 2)
+        self.assertIsNotNone(res["selectedWord"])
+        self.assertNotIn(res["selectedWord"]["id"], (ids[0], ids[2]))
         left = {w["word"] for w in self.rpc("snapshot", {})["words"]}
         left |= {w["word"] for w in self.rpc("snapshot", {"listFilter": "__learned__"})["words"]}
         self.assertEqual(left, {"beta", "delta"})
+
+        # Tamamen boşalan liste kalmaz; Custom kalır
+        solo = self.rpc("add-word", {"word": "solo", "meaning": "tek", "listName": "Solo"})["wordId"]
+        self.assertIn("Solo", {l["name"] for l in self.rpc("snapshot", {})["lists"]})
+        names = {l["name"] for l in self.rpc("delete-words", {"ids": [solo]})["lists"]}
+        self.assertNotIn("Solo", names)
+        self.assertIn("Deck", names)
 
     def test_legacy_kelime_db_migration_and_csv_export(self) -> None:
         import sqlite3

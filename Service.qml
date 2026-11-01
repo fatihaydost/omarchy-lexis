@@ -525,11 +525,22 @@ Item {
     enqueueRpc("set-hidden", _queryStatePayload({ wordId: Number(wordId), hidden: !!hidden }), null)
   }
 
+  // Köşedeki kartın kelimesi öğrenildi/silindiyse kart kapanır: yoksa yeni soruları bekletir
+  // ve "Bir daha gösterme" öğrenilmiş kelimeyi gizliye çevirirdi.
+  function _closeCardFor(ids) {
+    if (activeQuestion && (ids || []).map(Number).indexOf(Number(activeQuestion.wordId)) >= 0) {
+      feedbackToast = null
+      activeQuestion = null
+    }
+  }
+
   function setWordsLearned(ids, learned, cb) {
+    if (learned) _closeCardFor(ids)
     enqueueRpc("set-learned", _queryStatePayload({ ids: ids || [], learned: !!learned }), function(res) { if (cb) cb(res) })
   }
 
   function deleteWords(ids, cb) {
+    _closeCardFor(ids)
     enqueueRpc("delete-words", _queryStatePayload({ ids: ids || [] }), function(res) { if (cb) cb(res) })
   }
 
